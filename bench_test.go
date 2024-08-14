@@ -4,11 +4,11 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/hey-kong/dimcache/cache/fifo"
-	"github.com/hey-kong/dimcache/cache/lever"
-	"github.com/hey-kong/dimcache/cache/lru"
-	"github.com/hey-kong/dimcache/cache/sieve"
-	"github.com/hey-kong/dimcache/util"
+	"github.com/hey-kong/lever/cache/fifo"
+	"github.com/hey-kong/lever/cache/lever"
+	"github.com/hey-kong/lever/cache/lru"
+	"github.com/hey-kong/lever/cache/sieve"
+	"github.com/hey-kong/lever/util"
 )
 
 // CacheInterface defines the interface for a cache

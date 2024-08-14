@@ -59,17 +59,17 @@ func (c *Cache) Add(key string, value []byte) {
 		return
 	}
 
-	if c.MaxEntries != 0 && c.ll.Len() >= c.MaxEntries {
-		// AIMD-based adjustment.
-		for i := 0; i < c.n/2; i++ {
-			c.ptr.Value.(*entry).visited = false
-			c.ptr = c.ptr.Prev()
-		}
-		c.n = c.n / 2
-		c.RemoveOldest()
+	// AIMD-based adjustment.
+	for i := 0; i < c.n/2; i++ {
+		c.ptr.Value.(*entry).visited = false
+		c.ptr = c.ptr.Prev()
 	}
+	c.n = c.n / 2
 	ele := c.ll.InsertAfter(&entry{key, value, false}, c.ptr)
 	c.cache[key] = ele
+	if c.MaxEntries != 0 && c.ll.Len() > c.MaxEntries {
+		c.RemoveOldest()
+	}
 }
 
 // Get looks up a key's value from the cache.
@@ -78,7 +78,7 @@ func (c *Cache) Get(key string) (value []byte, ok bool) {
 		return
 	}
 	if ele, hit := c.cache[key]; hit {
-		if !ele.Value.(*entry).visited {
+		if ele.Value.(*entry).visited == false {
 			c.ll.MoveToFront(ele)
 			ele.Value.(*entry).visited = true
 			c.n++

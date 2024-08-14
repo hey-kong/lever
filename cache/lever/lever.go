@@ -136,3 +136,19 @@ func (c *Cache) Clear() {
 	c.ll = nil
 	c.cache = nil
 }
+
+// Stats returns the total number of entries and the number of hot entries.
+func (c *Cache) Stats() (total int, hot int) {
+	if c.cache == nil {
+		return 0, 0
+	}
+
+	total = c.ll.Len()
+	hot = 0
+	for _, e := range c.cache {
+		if e.Value.(*entry).visited {
+			hot++
+		}
+	}
+	return total, hot
+}

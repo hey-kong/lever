@@ -38,15 +38,14 @@ func (c *Cache) Add(key string, value []byte) {
 		c.ll = list.New()
 	}
 	if ee, ok := c.cache[key]; ok {
-		c.ll.MoveToFront(ee)
 		ee.Value.(*entry).value = value
 		return
 	}
-	ele := c.ll.PushFront(&entry{key, value})
-	c.cache[key] = ele
-	if c.MaxEntries != 0 && c.ll.Len() > c.MaxEntries {
+	if c.MaxEntries != 0 && c.ll.Len() >= c.MaxEntries {
 		c.RemoveOldest()
 	}
+	ele := c.ll.PushFront(&entry{key, value})
+	c.cache[key] = ele
 }
 
 // Get looks up a key's value from the cache.

@@ -1,6 +1,6 @@
-# DimCache
+# LEVER
 
-Simple and Efficient Cache Management for Skewed Workloads.
+Efficient Cache Management for Skewed Workloads.
 
 ## To run benchmark
 

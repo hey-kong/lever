@@ -1,4 +1,4 @@
-package dimcache
+package lever
 
 import (
 	"math/rand"
@@ -17,12 +17,12 @@ type CacheInterface interface {
 }
 
 var (
-	putOperations []struct {
+	getOperations []struct {
 		write bool
 		key   string
 		value []byte
 	}
-	getOperations []struct {
+	putOperations []struct {
 		write bool
 		key   string
 		value []byte
@@ -37,6 +37,7 @@ var (
 var lruCache *lru.Cache
 var sieveCache *sieve.Cache
 var fifoCache *fifo.Cache
+var leverCache *Cache
 
 func init() {
 	cacheSize := 10000
@@ -50,6 +51,7 @@ func init() {
 	initLruCache(cacheSize)
 	initSieveCache(cacheSize)
 	initFifoCache(cacheSize)
+	initLeverCache(cacheSize)
 }
 
 func initLruCache(num int) {
@@ -85,6 +87,18 @@ func initFifoCache(num int) {
 			panic(err)
 		}
 		fifoCache.Add(key, val)
+	}
+}
+
+func initLeverCache(num int) {
+	leverCache = New(num)
+	for n := 0; n < num; n++ {
+		key := util.GetFixedLengthKey(n)
+		val, err := util.GetValue(64)
+		if err != nil {
+			panic(err)
+		}
+		leverCache.Add(key, val)
 	}
 }
 
@@ -215,4 +229,12 @@ func BenchmarkFifoHybrid(b *testing.B) {
 	b.ResetTimer()
 
 	RunBenchmark(b, fifoCache)
+}
+
+// LEVER Hybrid
+func BenchmarkLeverHybrid(b *testing.B) {
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	RunBenchmark(b, leverCache)
 }

@@ -18,7 +18,6 @@ limitations under the License.
 
 import "container/list"
 
-// Cache is an LRU cache. It is not safe for concurrent access.
 type Cache struct {
 	// MaxEntries is the maximum number of cache entries before
 	// an item is evicted. Zero means no limit.

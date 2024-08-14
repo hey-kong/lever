@@ -4,9 +4,10 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/hey-kong/dimcache/test/fifo"
-	"github.com/hey-kong/dimcache/test/lru"
-	"github.com/hey-kong/dimcache/test/sieve"
+	"github.com/hey-kong/dimcache/cache/fifo"
+	"github.com/hey-kong/dimcache/cache/lever"
+	"github.com/hey-kong/dimcache/cache/lru"
+	"github.com/hey-kong/dimcache/cache/sieve"
 	"github.com/hey-kong/dimcache/util"
 )
 
@@ -37,7 +38,7 @@ var (
 var lruCache *lru.Cache
 var sieveCache *sieve.Cache
 var fifoCache *fifo.Cache
-var leverCache *Cache
+var leverCache *lever.Cache
 
 func init() {
 	cacheSize := 10000
@@ -91,7 +92,7 @@ func initFifoCache(num int) {
 }
 
 func initLeverCache(num int) {
-	leverCache = New(num)
+	leverCache = lever.New(num)
 	for n := 0; n < num; n++ {
 		key := util.GetFixedLengthKey(n)
 		val, err := util.GetValue(64)

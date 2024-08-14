@@ -4,6 +4,7 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/hey-kong/dimcache/test/fifo"
 	"github.com/hey-kong/dimcache/test/lru"
 	"github.com/hey-kong/dimcache/test/sieve"
 	"github.com/hey-kong/dimcache/util"
@@ -35,6 +36,7 @@ var (
 
 var lruCache *lru.Cache
 var sieveCache *sieve.Cache
+var fifoCache *fifo.Cache
 
 func init() {
 	cacheSize := 10000
@@ -47,6 +49,7 @@ func init() {
 	operations = GenerateWorkload(numOperations, writeRatio, keyRange)
 	initLruCache(cacheSize)
 	initSieveCache(cacheSize)
+	initFifoCache(cacheSize)
 }
 
 func initLruCache(num int) {
@@ -70,6 +73,18 @@ func initSieveCache(num int) {
 			panic(err)
 		}
 		sieveCache.Add(key, val)
+	}
+}
+
+func initFifoCache(num int) {
+	fifoCache = fifo.New(num)
+	for n := 0; n < num; n++ {
+		key := util.GetFixedLengthKey(n)
+		val, err := util.GetValue(64)
+		if err != nil {
+			panic(err)
+		}
+		fifoCache.Add(key, val)
 	}
 }
 
@@ -192,4 +207,12 @@ func BenchmarkSieveHybrid(b *testing.B) {
 	b.ResetTimer()
 
 	RunBenchmark(b, sieveCache)
+}
+
+// FIFO Hybrid
+func BenchmarkFifoHybrid(b *testing.B) {
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	RunBenchmark(b, fifoCache)
 }

@@ -31,3 +31,17 @@ func BenchmarkSieveGetValue64B(b *testing.B) {
 		sieveCache.Get(op.key)
 	}
 }
+
+// FIFO Get
+func BenchmarkFifoGetValue64B(b *testing.B) {
+	initFifoCache(b.N)
+	opLen := len(getOperations)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for n := 0; n < b.N; n++ {
+		op := getOperations[n%opLen]
+		fifoCache.Get(op.key)
+	}
+}

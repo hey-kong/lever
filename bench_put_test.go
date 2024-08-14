@@ -3,6 +3,7 @@ package dimcache
 import (
 	"testing"
 
+	"github.com/hey-kong/dimcache/test/fifo"
 	"github.com/hey-kong/dimcache/test/lru"
 	"github.com/hey-kong/dimcache/test/sieve"
 )
@@ -32,5 +33,19 @@ func BenchmarkSievePutValue64B(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		op := putOperations[n%opLen]
 		sieveCache.Add(op.key, op.value)
+	}
+}
+
+// FIFO Put
+func BenchmarkFifoPutValue64B(b *testing.B) {
+	fifoCache = fifo.New(b.N / 2)
+	opLen := len(putOperations)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for n := 0; n < b.N; n++ {
+		op := putOperations[n%opLen]
+		fifoCache.Add(op.key, op.value)
 	}
 }

@@ -1,6 +1,8 @@
 package lever
 
-import "container/list"
+import (
+	"container/list"
+)
 
 type Cache struct {
 	// MaxEntries is the maximum number of cache entries before
@@ -12,7 +14,7 @@ type Cache struct {
 	OnEvicted func(key string, value []byte)
 
 	// Number of recent moves to the front.
-	n int
+	hot int
 
 	ptr   *list.Element
 	ll    *list.List
@@ -31,7 +33,7 @@ type entry struct {
 func New(maxEntries int) *Cache {
 	return &Cache{
 		MaxEntries: maxEntries,
-		n:          0,
+		hot:        0,
 		ptr:        nil,
 		ll:         list.New(),
 		cache:      nil,
@@ -47,27 +49,28 @@ func (c *Cache) Add(key string, value []byte) {
 		ele := c.ll.PushFront(&entry{key, value, true})
 		c.cache[key] = ele
 		c.ptr = ele
+		c.hot = 1
+		return
 	}
 
 	if ee, ok := c.cache[key]; ok {
 		if ee.Value.(*entry).visited == false {
 			c.ll.MoveToFront(ee)
 			ee.Value.(*entry).visited = true
-			c.n++
+			c.hot++
 		}
 		ee.Value.(*entry).value = value
 		return
 	}
 
-	// AIMD-based adjustment.
-	for i := 0; i < c.n/2; i++ {
-		c.ptr.Value.(*entry).visited = false
-		c.ptr = c.ptr.Prev()
-	}
-	c.n = c.n / 2
 	ele := c.ll.InsertAfter(&entry{key, value, false}, c.ptr)
 	c.cache[key] = ele
 	if c.MaxEntries != 0 && c.ll.Len() > c.MaxEntries {
+		for c.hot > 99*c.MaxEntries/100 {
+			c.ptr.Value.(*entry).visited = false
+			c.ptr = c.ptr.Prev()
+			c.hot--
+		}
 		c.RemoveOldest()
 	}
 }
@@ -81,7 +84,7 @@ func (c *Cache) Get(key string) (value []byte, ok bool) {
 		if ele.Value.(*entry).visited == false {
 			c.ll.MoveToFront(ele)
 			ele.Value.(*entry).visited = true
-			c.n++
+			c.hot++
 		}
 		return ele.Value.(*entry).value, true
 	}
@@ -146,7 +149,7 @@ func (c *Cache) Stats() (total int, hot int) {
 	total = c.ll.Len()
 	hot = 0
 	for _, e := range c.cache {
-		if e.Value.(*entry).visited {
+		if e.Value.(*entry).visited == true {
 			hot++
 		}
 	}

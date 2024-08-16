@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/hey-kong/lever/cache/fifo"
+	refifo "github.com/hey-kong/lever/cache/fifo_reinsertion"
 	"github.com/hey-kong/lever/cache/lever"
 	"github.com/hey-kong/lever/cache/lru"
 	"github.com/hey-kong/lever/cache/sieve"
@@ -26,11 +27,20 @@ func countUniqueKeys(keys []string) int {
 	return len(keySet)
 }
 
-// generateTestData generates the keys to be accessed based on Zipf distribution
-func generateTestData(n int, maxKey uint64) []string {
+// generateTestData generates the unique keys.
+func generateTestData(n int) []string {
+	keys := make([]string, n)
+	for i := 0; i < n; i++ {
+		keys[i] = fmt.Sprintf("key%d", i)
+	}
+	return keys
+}
+
+// generateSkewedTestData generates the keys to be accessed based on Zipf distribution.
+func generateSkewedTestData(n int, maxKey uint64) []string {
 	s := rand.NewSource(time.Now().UnixNano())
 	r := rand.New(s)
-	zipf := rand.NewZipf(r, 1.01, 1.0, maxKey)
+	zipf := rand.NewZipf(r, 1.07, 1.0, maxKey)
 
 	keys := make([]string, n)
 	for i := 0; i < n; i++ {
@@ -40,26 +50,26 @@ func generateTestData(n int, maxKey uint64) []string {
 	return keys
 }
 
-// initializeCacheWithHotData initializes cache with a set of "hot" keys
-func initializeCacheWithHotData(cache Cache, hotKeys []string) {
+// initializeCache initializes cache with a set of keys.
+func initializeCache(cache Cache, hotKeys []string) {
 	for _, key := range hotKeys {
 		cache.Add(key, []byte(fmt.Sprintf("value_%s", key)))
 	}
 }
 
-// runTest is a generic function to test different cache implementations
+// runTest is a generic function to test different cache implementations.
 func runTest(cache Cache, cacheName string, keys []string) {
 	var hits, misses int
 	start := time.Now()
 
-	// Use the pre-generated keys for the test
+	// Use the pre-generated keys for the test.
 	for _, key := range keys {
 		_, ok := cache.Get(key)
 		if ok {
 			hits++
 		} else {
 			misses++
-			cache.Add(key, []byte(fmt.Sprintf("value_%s", key)))
+			cache.Add(key, []byte(key))
 		}
 	}
 
@@ -70,22 +80,34 @@ func runTest(cache Cache, cacheName string, keys []string) {
 }
 
 func main() {
-	// Generate a consistent set of test keys for all tests
-	testKeys := generateTestData(10000000, 999999)
+	size := 10000
+	lruCache := lru.New(size)
+	fifoCache := fifo.New(size)
+	refifoCache := refifo.New(size)
+	sieveCache := sieve.New(size)
+	leverCache := lever.New(size)
+
+	testKeys := generateTestData(size)
+	initializeCache(lruCache, testKeys)
+	initializeCache(fifoCache, testKeys)
+	initializeCache(refifoCache, testKeys)
+	initializeCache(sieveCache, testKeys)
+	initializeCache(leverCache, testKeys)
+
+	// Generate a consistent set of test keys for all tests.
+	testKeys = generateSkewedTestData(1000000, 999999)
 	uniqueKeyCount := countUniqueKeys(testKeys)
 	fmt.Printf("Number of testKeys: %d; Number of unique keys in testKeys: %d\n", len(testKeys), uniqueKeyCount)
 
-	lruCache := lru.New(50000)
-	fifoCache := fifo.New(50000)
-	sieveCache := sieve.New(50000)
-	leverCache := lever.New(50000)
-
-	// Test each cache
+	// Test each cache.
 	runTest(lruCache, "LRU", testKeys)
 	runTest(fifoCache, "FIFO", testKeys)
+	runTest(refifoCache, "FIFO-Reinsertion", testKeys)
 	runTest(sieveCache, "SIEVE", testKeys)
 	runTest(leverCache, "LEVER", testKeys)
 
-	total, hot := leverCache.Stats()
+	total, hot := sieveCache.Stats()
+	fmt.Printf("[SIEVE] Number of keys: %d; Number of hot keys: %d\n", total, hot)
+	total, hot = leverCache.Stats()
 	fmt.Printf("[LEVER] Number of keys: %d; Number of hot keys: %d\n", total, hot)
 }

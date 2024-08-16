@@ -103,15 +103,19 @@ func (c *Cache) Remove(key string) {
 	}
 }
 
+var step = 10
+
 func (c *Cache) RemoveOldest() {
 	if c.cache == nil {
 		return
 	}
-	if c.hot == c.MaxEntries ||
-		(c.n > 1 && float32(c.hot)/float32(c.MaxEntries) > 0.8+(float32(c.n)/float32(c.n+1)*0.2)) {
-		c.ptr.Value.(*entry).visited = false
-		c.ptr = c.ptr.Prev()
-		c.hot--
+	if c.hot+step >= c.MaxEntries ||
+		(c.n > 1 && float32(c.hot)/float32(c.MaxEntries) > float32(c.n)/float32(c.n+1)) {
+		for i := 0; i < step; i++ {
+			c.ptr.Value.(*entry).visited = false
+			c.ptr = c.ptr.Prev()
+			c.hot--
+		}
 	}
 	ele := c.ll.Back()
 	if ele != nil {

@@ -95,7 +95,7 @@ func main() {
 	initializeCache(leverCache, testKeys)
 
 	// Generate a consistent set of test keys for all tests.
-	testKeys = generateSkewedTestData(1000000, 999999)
+	testKeys = generateSkewedTestData(10000000, 999999)
 	uniqueKeyCount := countUniqueKeys(testKeys)
 	fmt.Printf("Number of testKeys: %d; Number of unique keys in testKeys: %d\n", len(testKeys), uniqueKeyCount)
 

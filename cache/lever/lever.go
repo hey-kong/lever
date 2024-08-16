@@ -13,8 +13,11 @@ type Cache struct {
 	// executed when an entry is purged from the cache.
 	OnEvicted func(key string, value []byte)
 
-	// Number of recent moves to the front.
+	// Number of hot keys.
 	hot int
+
+	// Number of recent moves to the front.
+	n int
 
 	ptr   *list.Element
 	ll    *list.List
@@ -34,6 +37,7 @@ func New(maxEntries int) *Cache {
 	return &Cache{
 		MaxEntries: maxEntries,
 		hot:        0,
+		n:          0,
 		ptr:        nil,
 		ll:         list.New(),
 		cache:      nil,
@@ -58,21 +62,18 @@ func (c *Cache) Add(key string, value []byte) {
 			c.ll.MoveToFront(ee)
 			ee.Value.(*entry).visited = true
 			c.hot++
+			c.n++
 		}
 		ee.Value.(*entry).value = value
 		return
 	}
 
-	ele := c.ll.InsertAfter(&entry{key, value, false}, c.ptr)
-	c.cache[key] = ele
-	if c.MaxEntries != 0 && c.ll.Len() > c.MaxEntries {
-		for c.hot > 99*c.MaxEntries/100 {
-			c.ptr.Value.(*entry).visited = false
-			c.ptr = c.ptr.Prev()
-			c.hot--
-		}
+	if c.MaxEntries != 0 && c.ll.Len() >= c.MaxEntries {
 		c.RemoveOldest()
 	}
+	c.n = 0
+	ele := c.ll.InsertAfter(&entry{key, value, false}, c.ptr)
+	c.cache[key] = ele
 }
 
 // Get looks up a key's value from the cache.
@@ -85,6 +86,7 @@ func (c *Cache) Get(key string) (value []byte, ok bool) {
 			c.ll.MoveToFront(ele)
 			ele.Value.(*entry).visited = true
 			c.hot++
+			c.n++
 		}
 		return ele.Value.(*entry).value, true
 	}
@@ -104,6 +106,12 @@ func (c *Cache) Remove(key string) {
 func (c *Cache) RemoveOldest() {
 	if c.cache == nil {
 		return
+	}
+	if c.hot == c.MaxEntries ||
+		(c.n > 1 && float32(c.hot)/float32(c.MaxEntries) > 0.8+(float32(c.n)/float32(c.n+1)*0.2)) {
+		c.ptr.Value.(*entry).visited = false
+		c.ptr = c.ptr.Prev()
+		c.hot--
 	}
 	ele := c.ll.Back()
 	if ele != nil {
@@ -141,17 +149,9 @@ func (c *Cache) Clear() {
 }
 
 // Stats returns the total number of entries and the number of hot entries.
-func (c *Cache) Stats() (total int, hot int) {
+func (c *Cache) Stats() (int, int) {
 	if c.cache == nil {
 		return 0, 0
 	}
-
-	total = c.ll.Len()
-	hot = 0
-	for _, e := range c.cache {
-		if e.Value.(*entry).visited == true {
-			hot++
-		}
-	}
-	return total, hot
+	return c.ll.Len(), c.hot
 }

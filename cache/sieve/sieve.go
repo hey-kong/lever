@@ -16,7 +16,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-import "container/list"
+import (
+	"container/list"
+)
 
 type Cache struct {
 	// MaxEntries is the maximum number of cache entries before
@@ -62,11 +64,11 @@ func (c *Cache) Add(key string, value []byte) {
 		ee.Value.(*entry).value = value
 		return
 	}
-	ele := c.ll.PushFront(&entry{key, value, false})
-	c.cache[key] = ele
-	if c.MaxEntries != 0 && c.ll.Len() > c.MaxEntries {
+	if c.MaxEntries != 0 && c.ll.Len() >= c.MaxEntries {
 		c.RemoveOldest()
 	}
+	ele := c.ll.PushFront(&entry{key, value, false})
+	c.cache[key] = ele
 }
 
 // Get looks up a key's value from the cache.
@@ -100,12 +102,12 @@ func (c *Cache) RemoveOldest() {
 	if ele == nil {
 		ele = c.ll.Back()
 	}
-	for ele != nil && ele.Value.(*entry).visited {
+	for ele.Value.(*entry).visited {
 		ele.Value.(*entry).visited = false
 		ele = ele.Prev()
-	}
-	if ele == nil {
-		println("Error: RemoveOldest cannot find element")
+		if ele == nil {
+			ele = c.ll.Back()
+		}
 	}
 	c.ptr = ele.Prev()
 	c.removeElement(ele)

@@ -59,8 +59,8 @@ func (c *Cache) Add(key string, value []byte) {
 
 	if ee, ok := c.cache[key]; ok {
 		if ee.Value.(*entry).visited == false {
-			c.ll.MoveToFront(ee)
 			ee.Value.(*entry).visited = true
+			c.ll.MoveToFront(ee)
 			c.hot++
 			c.n++
 		}
@@ -83,8 +83,8 @@ func (c *Cache) Get(key string) (value []byte, ok bool) {
 	}
 	if ele, hit := c.cache[key]; hit {
 		if ele.Value.(*entry).visited == false {
-			c.ll.MoveToFront(ele)
 			ele.Value.(*entry).visited = true
+			c.ll.MoveToFront(ele)
 			c.hot++
 			c.n++
 		}
@@ -103,15 +103,20 @@ func (c *Cache) Remove(key string) {
 	}
 }
 
-var step = 10
-
 func (c *Cache) RemoveOldest() {
 	if c.cache == nil {
 		return
 	}
-	if c.hot+step >= c.MaxEntries ||
-		(c.n > 1 && float32(c.hot)/float32(c.MaxEntries) > float32(c.n)/float32(c.n+1)) {
-		for i := 0; i < step; i++ {
+	if c.hot+c.MaxEntries/100 >= c.MaxEntries {
+		// If hot data > 99%, reset 1% of the tail hot data to cold.
+		for i := 0; i < c.MaxEntries/100; i++ {
+			c.ptr.Value.(*entry).visited = false
+			c.ptr = c.ptr.Prev()
+			c.hot--
+		}
+	} else if float32(c.n)/float32(c.MaxEntries) > 1.0/float32(c.MaxEntries-c.hot) {
+		// AIMD-like reset.
+		for i := 0; i < (c.n+1)/2; i++ {
 			c.ptr.Value.(*entry).visited = false
 			c.ptr = c.ptr.Prev()
 			c.hot--

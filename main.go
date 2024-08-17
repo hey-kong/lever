@@ -80,7 +80,7 @@ func runTest(cache Cache, cacheName string, keys []string) {
 }
 
 func main() {
-	size := 10000
+	size := 100000
 	lruCache := lru.New(size)
 	fifoCache := fifo.New(size)
 	refifoCache := refifo.New(size)

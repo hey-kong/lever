@@ -1,6 +1,6 @@
 # LEVER
 
-Efficient Cache Eviction for Skewed Workloads.
+Responsive and Scan-Resistant Cache Eviction for Skewed Workloads.
 
 ## Related Links
 

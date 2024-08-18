@@ -10,6 +10,7 @@ import (
 	"github.com/hey-kong/lever/cache/lever"
 	"github.com/hey-kong/lever/cache/lru"
 	"github.com/hey-kong/lever/cache/sieve"
+	"github.com/hey-kong/lever/cache/slru"
 )
 
 type Cache interface {
@@ -84,6 +85,7 @@ func main() {
 	lruCache := lru.New(size)
 	fifoCache := fifo.New(size)
 	refifoCache := refifo.New(size)
+	slruCache := slru.New(size)
 	sieveCache := sieve.New(size)
 	leverCache := lever.New(size)
 
@@ -91,6 +93,7 @@ func main() {
 	initializeCache(lruCache, testKeys)
 	initializeCache(fifoCache, testKeys)
 	initializeCache(refifoCache, testKeys)
+	initializeCache(slruCache, testKeys)
 	initializeCache(sieveCache, testKeys)
 	initializeCache(leverCache, testKeys)
 
@@ -103,6 +106,7 @@ func main() {
 	runTest(lruCache, "LRU", testKeys)
 	runTest(fifoCache, "FIFO", testKeys)
 	runTest(refifoCache, "FIFO-Reinsertion", testKeys)
+	runTest(slruCache, "SLRU", testKeys)
 	runTest(sieveCache, "SIEVE", testKeys)
 	runTest(leverCache, "LEVER", testKeys)
 

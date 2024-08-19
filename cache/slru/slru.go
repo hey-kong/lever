@@ -8,8 +8,7 @@ const (
 	DefaultProbationRatio = 0.2
 )
 
-// Cache is an LRU cache. It is not safe for concurrent access.
-type Cache struct {
+type LruCache struct {
 	// MaxEntries is the maximum number of cache entries before
 	// an item is evicted. Zero means no limit.
 	MaxEntries int
@@ -27,8 +26,8 @@ type entry struct {
 	value []byte
 }
 
-func NewLRU(maxEntries int) *Cache {
-	return &Cache{
+func NewLRU(maxEntries int) *LruCache {
+	return &LruCache{
 		MaxEntries: maxEntries,
 		ll:         list.New(),
 		cache:      make(map[interface{}]*list.Element),
@@ -36,7 +35,7 @@ func NewLRU(maxEntries int) *Cache {
 }
 
 // Add adds a value to the cache.
-func (c *Cache) Add(key string, value []byte) (e *list.Element) {
+func (c *LruCache) Add(key string, value []byte) (e *list.Element) {
 	if c.cache == nil {
 		c.cache = make(map[interface{}]*list.Element)
 		c.ll = list.New()
@@ -56,7 +55,7 @@ func (c *Cache) Add(key string, value []byte) (e *list.Element) {
 }
 
 // Get looks up a key's value from the cache.
-func (c *Cache) Get(key string) (value []byte, ok bool) {
+func (c *LruCache) Get(key string) (value []byte, ok bool) {
 	if c.cache == nil {
 		return
 	}
@@ -68,7 +67,7 @@ func (c *Cache) Get(key string) (value []byte, ok bool) {
 }
 
 // Remove removes the provided key from the cache.
-func (c *Cache) Remove(key string) {
+func (c *LruCache) Remove(key string) {
 	if c.cache == nil {
 		return
 	}
@@ -78,7 +77,7 @@ func (c *Cache) Remove(key string) {
 }
 
 // RemoveOldest removes the oldest item from the cache.
-func (c *Cache) RemoveOldest() {
+func (c *LruCache) RemoveOldest() {
 	if c.cache == nil {
 		return
 	}
@@ -88,7 +87,7 @@ func (c *Cache) RemoveOldest() {
 	}
 }
 
-func (c *Cache) removeElement(e *list.Element) {
+func (c *LruCache) removeElement(e *list.Element) {
 	c.ll.Remove(e)
 	kv := e.Value.(*entry)
 	delete(c.cache, kv.key)
@@ -98,31 +97,35 @@ func (c *Cache) removeElement(e *list.Element) {
 }
 
 // Len returns the number of items in the cache.
-func (c *Cache) Len() int {
+func (c *LruCache) Len() int {
 	if c.cache == nil {
 		return 0
 	}
 	return c.ll.Len()
 }
 
-// Clear purges all stored items from the cache.
-func (c *Cache) Clear() {
-	if c.OnEvicted != nil {
-		for _, e := range c.cache {
-			kv := e.Value.(*entry)
-			c.OnEvicted(kv.key, kv.value)
-		}
+type Cache struct {
+	probation *LruCache
+	protected *LruCache
+}
+
+func NewWithParams(probationSize int, protectedSize int) *Cache {
+	return &Cache{
+		probation: NewLRU(probationSize),
+		protected: NewLRU(protectedSize),
 	}
-	c.ll = nil
-	c.cache = nil
 }
 
-type SLRU struct {
-	probation *Cache
-	protected *Cache
+func New(size int) *Cache {
+	probationSize := int(DefaultProbationRatio * float64(size))
+	protectedSize := size - probationSize
+	return NewWithParams(
+		probationSize,
+		protectedSize,
+	)
 }
 
-func (S *SLRU) Add(key string, value []byte) {
+func (S *Cache) Add(key string, value []byte) {
 	if S.probation == nil || S.protected == nil {
 		return
 	}
@@ -144,7 +147,7 @@ func (S *SLRU) Add(key string, value []byte) {
 	S.probation.Add(key, value)
 }
 
-func (S *SLRU) Get(key string) (value []byte, ok bool) {
+func (S *Cache) Get(key string) (value []byte, ok bool) {
 	if S.probation == nil || S.protected == nil {
 		return
 	}
@@ -163,30 +166,14 @@ func (S *SLRU) Get(key string) (value []byte, ok bool) {
 	return
 }
 
-func (S *SLRU) Len() int {
+func (S *Cache) Len() int {
 	return S.probation.Len() + S.protected.Len()
 }
 
-func (S *SLRU) Remove(key string) {
+func (S *Cache) Remove(key string) {
 	if _, ok := S.protected.Get(key); ok {
 		S.protected.Remove(key)
 		return
 	}
 	S.probation.Remove(key)
-}
-
-func NewWithParams(probationSize int, protectedSize int) *SLRU {
-	return &SLRU{
-		probation: NewLRU(probationSize),
-		protected: NewLRU(protectedSize),
-	}
-}
-
-func New(size int) *SLRU {
-	probationSize := int(DefaultProbationRatio * float64(size))
-	protectedSize := size - probationSize
-	return NewWithParams(
-		probationSize,
-		protectedSize,
-	)
 }

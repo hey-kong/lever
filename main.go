@@ -11,6 +11,7 @@ import (
 	"github.com/hey-kong/lever/cache/lru"
 	"github.com/hey-kong/lever/cache/sieve"
 	"github.com/hey-kong/lever/cache/slru"
+	twoq "github.com/hey-kong/lever/cache/twoqueue"
 )
 
 type Cache interface {
@@ -86,6 +87,7 @@ func main() {
 	fifoCache := fifo.New(size)
 	refifoCache := refifo.New(size)
 	slruCache := slru.New(size)
+	twoQCache := twoq.New(size)
 	sieveCache := sieve.New(size)
 	leverCache := lever.New(size)
 
@@ -94,6 +96,7 @@ func main() {
 	initializeCache(fifoCache, testKeys)
 	initializeCache(refifoCache, testKeys)
 	initializeCache(slruCache, testKeys)
+	initializeCache(twoQCache, testKeys)
 	initializeCache(sieveCache, testKeys)
 	initializeCache(leverCache, testKeys)
 
@@ -101,12 +104,12 @@ func main() {
 	testKeys = generateSkewedTestData(10000000, 999999)
 	uniqueKeyCount := countUniqueKeys(testKeys)
 	fmt.Printf("Number of testKeys: %d; Number of unique keys in testKeys: %d\n", len(testKeys), uniqueKeyCount)
-
 	// Test each cache.
 	runTest(lruCache, "LRU", testKeys)
 	runTest(fifoCache, "FIFO", testKeys)
 	runTest(refifoCache, "FIFO-Reinsertion", testKeys)
 	runTest(slruCache, "SLRU", testKeys)
+	runTest(twoQCache, "2Q", testKeys)
 	runTest(sieveCache, "SIEVE", testKeys)
 	runTest(leverCache, "LEVER", testKeys)
 

@@ -5,13 +5,13 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/hey-kong/lever/cache/fifo"
-	refifo "github.com/hey-kong/lever/cache/fifo_reinsertion"
-	"github.com/hey-kong/lever/cache/lever"
-	"github.com/hey-kong/lever/cache/lru"
-	"github.com/hey-kong/lever/cache/sieve"
-	"github.com/hey-kong/lever/cache/slru"
-	twoq "github.com/hey-kong/lever/cache/twoqueue"
+	"github.com/hey-kong/lever/go-cachesim/cache/fifo"
+	refifo "github.com/hey-kong/lever/go-cachesim/cache/fifo_reinsertion"
+	"github.com/hey-kong/lever/go-cachesim/cache/lever"
+	"github.com/hey-kong/lever/go-cachesim/cache/lru"
+	"github.com/hey-kong/lever/go-cachesim/cache/sieve"
+	"github.com/hey-kong/lever/go-cachesim/cache/slru"
+	twoq "github.com/hey-kong/lever/go-cachesim/cache/twoqueue"
 )
 
 type Cache interface {
@@ -112,9 +112,11 @@ func main() {
 	runTest(twoQCache, "2Q", testKeys)
 	runTest(sieveCache, "SIEVE", testKeys)
 	runTest(leverCache, "LEVER", testKeys)
+	fmt.Println()
 
 	total, hot := sieveCache.Stats()
-	fmt.Printf("[SIEVE] Number of keys: %d; Number of hot keys: %d\n", total, hot)
+	fmt.Printf("SIEVE: Total keys = %d, Hot keys = %d\n", total, hot)
 	total, hot = leverCache.Stats()
-	fmt.Printf("[LEVER] Number of keys: %d; Number of hot keys: %d\n", total, hot)
+	fmt.Printf("LEVER: Total keys = %d, Hot keys = %d\n", total, hot)
+
 }

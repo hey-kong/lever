@@ -3,16 +3,10 @@ package fifo
 import "container/list"
 
 type Cache struct {
-	// MaxEntries is the maximum number of cache entries before
-	// an item is evicted. Zero means no limit.
 	MaxEntries int
-
-	// OnEvicted optionally specifies a callback function to be
-	// executed when an entry is purged from the cache.
-	OnEvicted func(key string, value []byte)
-
-	ll    *list.List
-	cache map[interface{}]*list.Element
+	OnEvicted  func(key string, value []byte)
+	ll         *list.List
+	cache      map[interface{}]*list.Element
 }
 
 type entry struct {
@@ -20,9 +14,6 @@ type entry struct {
 	value []byte
 }
 
-// New creates a new Cache.
-// If maxEntries is zero, the cache has no limit and it's assumed
-// that eviction is done by the caller.
 func New(maxEntries int) *Cache {
 	return &Cache{
 		MaxEntries: maxEntries,
@@ -31,7 +22,6 @@ func New(maxEntries int) *Cache {
 	}
 }
 
-// Add adds a value to the cache.
 func (c *Cache) Add(key string, value []byte) {
 	if c.cache == nil {
 		c.cache = make(map[interface{}]*list.Element)
@@ -48,7 +38,6 @@ func (c *Cache) Add(key string, value []byte) {
 	c.cache[key] = ele
 }
 
-// Get looks up a key's value from the cache.
 func (c *Cache) Get(key string) (value []byte, ok bool) {
 	if c.cache == nil {
 		return
@@ -59,7 +48,6 @@ func (c *Cache) Get(key string) (value []byte, ok bool) {
 	return
 }
 
-// Remove removes the provided key from the cache.
 func (c *Cache) Remove(key string) {
 	if c.cache == nil {
 		return
@@ -69,7 +57,6 @@ func (c *Cache) Remove(key string) {
 	}
 }
 
-// RemoveOldest removes the oldest item from the cache.
 func (c *Cache) RemoveOldest() {
 	if c.cache == nil {
 		return
@@ -89,7 +76,6 @@ func (c *Cache) removeElement(e *list.Element) {
 	}
 }
 
-// Len returns the number of items in the cache.
 func (c *Cache) Len() int {
 	if c.cache == nil {
 		return 0
@@ -97,7 +83,6 @@ func (c *Cache) Len() int {
 	return c.ll.Len()
 }
 
-// Clear purges all stored items from the cache.
 func (c *Cache) Clear() {
 	if c.OnEvicted != nil {
 		for _, e := range c.cache {

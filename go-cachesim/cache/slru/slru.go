@@ -9,16 +9,10 @@ const (
 )
 
 type LruCache struct {
-	// MaxEntries is the maximum number of cache entries before
-	// an item is evicted. Zero means no limit.
 	MaxEntries int
-
-	// OnEvicted optionally specifies a callback function to be
-	// executed when an entry is purged from the cache.
-	OnEvicted func(key string, value []byte)
-
-	ll    *list.List
-	cache map[interface{}]*list.Element
+	OnEvicted  func(key string, value []byte)
+	ll         *list.List
+	cache      map[interface{}]*list.Element
 }
 
 type entry struct {
@@ -34,7 +28,6 @@ func NewLRU(maxEntries int) *LruCache {
 	}
 }
 
-// Add adds a value to the cache.
 func (c *LruCache) Add(key string, value []byte) (e *list.Element) {
 	if c.cache == nil {
 		c.cache = make(map[interface{}]*list.Element)
@@ -54,7 +47,6 @@ func (c *LruCache) Add(key string, value []byte) (e *list.Element) {
 	return
 }
 
-// Get looks up a key's value from the cache.
 func (c *LruCache) Get(key string) (value []byte, ok bool) {
 	if c.cache == nil {
 		return
@@ -66,7 +58,6 @@ func (c *LruCache) Get(key string) (value []byte, ok bool) {
 	return
 }
 
-// Remove removes the provided key from the cache.
 func (c *LruCache) Remove(key string) {
 	if c.cache == nil {
 		return
@@ -76,7 +67,6 @@ func (c *LruCache) Remove(key string) {
 	}
 }
 
-// RemoveOldest removes the oldest item from the cache.
 func (c *LruCache) RemoveOldest() {
 	if c.cache == nil {
 		return
@@ -96,7 +86,6 @@ func (c *LruCache) removeElement(e *list.Element) {
 	}
 }
 
-// Len returns the number of items in the cache.
 func (c *LruCache) Len() int {
 	if c.cache == nil {
 		return 0

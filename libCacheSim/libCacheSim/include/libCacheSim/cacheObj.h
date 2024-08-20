@@ -128,6 +128,10 @@ typedef struct {
 } __attribute__((packed)) Sieve_obj_params_t;
 
 typedef struct {
+  int32_t freq;
+} __attribute__((packed)) Lever_obj_params_t;
+
+typedef struct {
   int64_t next_access_vtime;
   int32_t freq;
 } __attribute__((packed)) misc_metadata_t;
@@ -173,6 +177,7 @@ typedef struct cache_obj {
     LIRS_obj_metadata_t LIRS;
     S3FIFO_obj_metadata_t S3FIFO;
     Sieve_obj_params_t sieve;
+    Lever_obj_params_t lever;
 
 #if defined(ENABLE_GLCACHE) && ENABLE_GLCACHE == 1
     GLCache_obj_metadata_t GLCache;
@@ -257,6 +262,16 @@ void move_obj_to_head(cache_obj_t **head, cache_obj_t **tail,
  */
 void prepend_obj_to_head(cache_obj_t **head, cache_obj_t **tail,
                          cache_obj_t *cache_obj);
+
+/**
+ * insert the object after the marked node in the doubly linked list
+ * @param head
+ * @param tail
+ * @param mark
+ * @param cache_obj
+ */
+void insert_obj_after_mark(cache_obj_t **head, cache_obj_t **tail,
+                           cache_obj_t **mark, cache_obj_t *cache_obj);
 
 /**
  * append the object to the tail of the doubly linked list

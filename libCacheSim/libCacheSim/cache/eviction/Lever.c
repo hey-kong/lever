@@ -185,8 +185,8 @@ static cache_obj_t *Lever_to_evict(cache_t *cache, const request_t *req) {
 static void Lever_evict(cache_t *cache, const request_t *req) {
   Lever_params_t *params = (Lever_params_t *)cache->eviction_params;
   // TODO: Need to make sure it's not all hot data
-  if (params->hot + cache->n_obj/2 > cache->n_obj) {
-    for (int64_t i = 0; i < cache->n_obj/100; i++) {
+  if (params->hot + cache->n_obj/4 >= cache->n_obj) {
+    for (int64_t i = 0; i < cache->n_obj/100+1; i++) {
 			cache_obj_t *obj = params->pointer;
       obj->lever.freq = 0;
 			params->pointer = obj->queue.prev;
@@ -203,7 +203,7 @@ static void Lever_evict(cache_t *cache, const request_t *req) {
 	}
 
   cache_obj_t *obj_to_evict = params->q_tail;
-  DEBUG_ASSERT(params->q_tail != NULL && params->q_tail != params->pointer);
+  DEBUG_ASSERT(params->q_tail != NULL);
 
   // we can simply call remove_obj_from_list here, but for the best performance,
   // we chose to do it manually

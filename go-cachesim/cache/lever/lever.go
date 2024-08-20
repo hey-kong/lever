@@ -40,7 +40,7 @@ func New(maxEntries int) *Cache {
 		n:          0,
 		ptr:        nil,
 		ll:         list.New(),
-		cache:      nil,
+		cache:      make(map[interface{}]*list.Element),
 	}
 }
 
@@ -50,11 +50,9 @@ func (c *Cache) Add(key string, value []byte) {
 	if c.cache == nil {
 		c.ll = list.New()
 		c.cache = make(map[interface{}]*list.Element)
-		ele := c.ll.PushFront(&entry{key, value, true})
-		c.cache[key] = ele
-		c.ptr = ele
-		c.hot = 1
-		return
+		c.ptr = nil
+		c.hot = 0
+		c.n = 0
 	}
 
 	if ee, ok := c.cache[key]; ok {
@@ -63,6 +61,9 @@ func (c *Cache) Add(key string, value []byte) {
 			c.ll.MoveToFront(ee)
 			c.hot++
 			c.n++
+			if c.ptr == nil {
+				c.ptr = ee
+			}
 		}
 		ee.Value.(*entry).value = value
 		return
@@ -71,9 +72,14 @@ func (c *Cache) Add(key string, value []byte) {
 	if c.MaxEntries != 0 && c.ll.Len() >= c.MaxEntries {
 		c.RemoveOldest()
 	}
-	c.n = 0
-	ele := c.ll.InsertAfter(&entry{key, value, false}, c.ptr)
+	var ele *list.Element
+	if c.hot == 0 {
+		ele = c.ll.PushFront(&entry{key, value, false})
+	} else {
+		ele = c.ll.InsertAfter(&entry{key, value, false}, c.ptr)
+	}
 	c.cache[key] = ele
+	c.n = 0
 }
 
 // Get looks up a key's value from the cache.
@@ -87,6 +93,9 @@ func (c *Cache) Get(key string) (value []byte, ok bool) {
 			c.ll.MoveToFront(ele)
 			c.hot++
 			c.n++
+			if c.ptr == nil {
+				c.ptr = ele
+			}
 		}
 		return ele.Value.(*entry).value, true
 	}
@@ -107,14 +116,14 @@ func (c *Cache) RemoveOldest() {
 	if c.cache == nil {
 		return
 	}
-	if c.hot+c.MaxEntries/100 >= c.MaxEntries {
+	if c.hot+c.ll.Len()/100 >= c.ll.Len() {
 		// If hot data > 99%, reset 1% of the tail hot data to cold.
-		for i := 0; i < c.MaxEntries/100; i++ {
+		for i := 0; i < c.ll.Len()/100; i++ {
 			c.ptr.Value.(*entry).visited = false
 			c.ptr = c.ptr.Prev()
 			c.hot--
 		}
-	} else if float32(c.n)/float32(c.MaxEntries) > 1.0/float32(c.MaxEntries-c.hot) {
+	} else if float32(c.n)/float32(c.ll.Len()) > 1.0/float32(c.ll.Len()-c.hot) {
 		// AIMD-like reset.
 		for i := 0; i < (c.n+1)/2; i++ {
 			c.ptr.Value.(*entry).visited = false
@@ -129,6 +138,12 @@ func (c *Cache) RemoveOldest() {
 }
 
 func (c *Cache) removeElement(e *list.Element) {
+	if e.Value.(*entry).visited == true {
+		c.hot--
+		if c.ptr == e {
+			c.ptr = c.ptr.Prev()
+		}
+	}
 	c.ll.Remove(e)
 	kv := e.Value.(*entry)
 	delete(c.cache, kv.key)

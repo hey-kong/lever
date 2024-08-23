@@ -7,13 +7,14 @@
 extern "C" {
 #endif
 
+static uint32_t temp_mask = 0b1;
+static uint32_t visit_mask = 0b10;
+
 typedef struct {
   cache_obj_t *q_head;
   cache_obj_t *q_tail;
 
   cache_obj_t *pointer;
-  int64_t 	  hot;  // Number of hot keys
-	int64_t     n;    // Number of recent moves to the front
 } Lever_params_t;
 
 // ***********************************************************************
@@ -69,8 +70,6 @@ cache_t *Lever_init(const common_cache_params_t ccache_params,
   params->pointer = NULL;
   params->q_head = NULL;
   params->q_tail = NULL;
-  params->hot = 0;
-  params->n = 0;
 
   return cache;
 }
@@ -130,14 +129,12 @@ static cache_obj_t *Lever_find(cache_t *cache, const request_t *req,
                                const bool update_cache) {
   Lever_params_t *params = (Lever_params_t *)cache->eviction_params;
   cache_obj_t *cache_obj = cache_find_base(cache, req, update_cache);
-  if (cache_obj != NULL && cache_obj->lever.freq == 0 && update_cache) {
-    cache_obj->lever.freq = 1;
-    move_obj_to_head(&params->q_head, &params->q_tail, cache_obj);
-    params->hot++;
-    params->n++;
-    if (params->pointer == NULL) {
-      params->pointer = cache_obj;
+  if (cache_obj != NULL && update_cache) {
+    if ((cache_obj->lever.status & temp_mask) == 0) {
+      move_obj_to_head(&params->q_head, &params->q_tail, cache_obj);
+      cache_obj->lever.status |= temp_mask;
     }
+    cache_obj->lever.status |= visit_mask;
   }
 
   return cache_obj;
@@ -157,19 +154,19 @@ static cache_obj_t *Lever_find(cache_t *cache, const request_t *req,
 static cache_obj_t *Lever_insert(cache_t *cache, const request_t *req) {
   Lever_params_t *params = cache->eviction_params;
   cache_obj_t *obj = cache_insert_base(cache, req);
-  if (params->pointer == NULL) {
-    prepend_obj_to_head(&params->q_head, &params->q_tail, obj);
-  } else {
-    insert_obj_after_mark(&params->q_head, &params->q_tail, &params->pointer, obj);
-  }
-  obj->lever.freq = 0;
-  params->n = 0;
+  prepend_obj_to_head(&params->q_head, &params->q_tail, obj);
+  obj->lever.status = temp_mask;
 
   return obj;
 }
 
 static cache_obj_t *Lever_to_evict(cache_t *cache, const request_t *req) {
-  Lever_params_t *params = (Lever_params_t *)cache->eviction_params;
+  Lever_params_t *params = cache->eviction_params;
+  cache_obj_t *pointer = params->pointer;
+
+  if (pointer != NULL || (pointer->lever.status & visit_mask) == 0) {
+    return pointer;
+  }
   return params->q_tail;
 }
 
@@ -183,56 +180,48 @@ static cache_obj_t *Lever_to_evict(cache_t *cache, const request_t *req) {
  * @param evicted_obj if not NULL, return the evicted object to caller
  */
 static void Lever_evict(cache_t *cache, const request_t *req) {
-  Lever_params_t *params = (Lever_params_t *)cache->eviction_params;
-  // TODO: Need to make sure it's not all hot data
-  if (params->hot + cache->n_obj/4 >= cache->n_obj) {
-    for (int64_t i = 0; i < cache->n_obj/100+1; i++) {
-			cache_obj_t *obj = params->pointer;
-      obj->lever.freq = 0;
-			params->pointer = obj->queue.prev;
-			params->hot--;
-		}
-  } else if ((float)(params->n) / (float)(cache->n_obj) > 1.0f / (float)(cache->n_obj - params->hot)) {
-		// AIMD-like reset
-		for (int64_t i = 0; i < (params->n+1)/2; i++) {
-			cache_obj_t *obj = params->pointer;
-      obj->lever.freq = 0;
-			params->pointer = obj->queue.prev;
-			params->hot--;
-		}
-	}
+  Lever_params_t *params = cache->eviction_params;
 
-  cache_obj_t *obj_to_evict = params->q_tail;
-  DEBUG_ASSERT(params->q_tail != NULL);
+  /* if we have run one full around or first eviction */
+  params->pointer = params->pointer == NULL ? params->q_tail : params->pointer;
 
-  // we can simply call remove_obj_from_list here, but for the best performance,
-  // we chose to do it manually
-  // remove_obj_from_list(&params->q_head, &params->q_tail, obj);
-
-  params->q_tail = params->q_tail->queue.prev;
-  if (likely(params->q_tail != NULL)) {
-    params->q_tail->queue.next = NULL;
+  if ((params->pointer->lever.status & visit_mask) == 0) {
+    cache_obj_t *obj_to_evict = params->pointer;
+    params->pointer = params->pointer->queue.prev;
+    remove_obj_from_list(&params->q_head, &params->q_tail, obj_to_evict);
+    cache_evict_base(cache, obj_to_evict, true);
   } else {
-    /* cache->n_obj has not been updated */
-    DEBUG_ASSERT(cache->n_obj == 1);
-    params->q_head = NULL;
+    cache_obj_t *obj_to_evict = params->q_tail;
+    params->pointer->lever.status = 0;
+    params->pointer = params->pointer->queue.prev;
+    DEBUG_ASSERT(params->q_tail != NULL);
+    params->q_tail = params->q_tail->queue.prev;
+    if (likely(params->q_tail != NULL)) {
+      params->q_tail->queue.next = NULL;
+    } else {
+      /* cache->n_obj has not been updated */
+      DEBUG_ASSERT(cache->n_obj == 1);
+      params->q_head = NULL;
+    }
+    cache_evict_base(cache, obj_to_evict, true);
   }
 
-  cache_evict_base(cache, obj_to_evict, true);
+  if ((params->pointer->lever.status & visit_mask) != 0) {
+    params->pointer->lever.status = 0;
+		params->pointer = params->pointer->queue.prev;
+	}
 }
 
 static void Lever_remove_obj(cache_t *cache, cache_obj_t *obj_to_remove) {
   DEBUG_ASSERT(obj_to_remove != NULL);
   Lever_params_t *params = cache->eviction_params;
-  if (obj_to_remove->lever.freq == 1) {
-    params->hot--;
-    if (obj_to_remove == params->pointer) {
-      params->pointer = obj_to_remove->queue.prev;
-    }
+  if (obj_to_remove == params->pointer) {
+    params->pointer = obj_to_remove->queue.prev;
   }
   remove_obj_from_list(&params->q_head, &params->q_tail, obj_to_remove);
   cache_remove_obj_base(cache, obj_to_remove, true);
 }
+
 
 /**
  * @brief remove an object from the cache

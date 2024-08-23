@@ -128,7 +128,7 @@ typedef struct {
 } __attribute__((packed)) Sieve_obj_params_t;
 
 typedef struct {
-  int32_t freq;
+  uint32_t status;
 } __attribute__((packed)) Lever_obj_params_t;
 
 typedef struct {

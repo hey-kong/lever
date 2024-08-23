@@ -4,6 +4,13 @@ import (
 	"container/list"
 )
 
+const (
+	tempMask  = 1
+	visitMask = 1 << tempMask
+
+	DefaultMinHotThreshold = 0.5
+)
+
 type Cache struct {
 	// MaxEntries is the maximum number of cache entries before
 	// an item is evicted. Zero means no limit.
@@ -16,18 +23,15 @@ type Cache struct {
 	// Number of hot keys.
 	hot int
 
-	// Number of recent moves to the front.
-	n int
-
 	ptr   *list.Element
 	ll    *list.List
 	cache map[interface{}]*list.Element
 }
 
 type entry struct {
-	key     string
-	value   []byte
-	visited bool
+	key    string
+	value  []byte
+	status uint8
 }
 
 // New creates a new Cache.
@@ -37,7 +41,6 @@ func New(maxEntries int) *Cache {
 	return &Cache{
 		MaxEntries: maxEntries,
 		hot:        0,
-		n:          0,
 		ptr:        nil,
 		ll:         list.New(),
 		cache:      make(map[interface{}]*list.Element),
@@ -52,19 +55,17 @@ func (c *Cache) Add(key string, value []byte) {
 		c.cache = make(map[interface{}]*list.Element)
 		c.ptr = nil
 		c.hot = 0
-		c.n = 0
 	}
 
 	if ee, ok := c.cache[key]; ok {
-		if ee.Value.(*entry).visited == false {
-			ee.Value.(*entry).visited = true
+		if (ee.Value.(*entry).status & tempMask) == 0 {
+			// eager promotion
 			c.ll.MoveToFront(ee)
+			ee.Value.(*entry).status |= tempMask
 			c.hot++
-			c.n++
-			if c.ptr == nil {
-				c.ptr = ee
-			}
 		}
+		// non-promotion
+		ee.Value.(*entry).status |= visitMask
 		ee.Value.(*entry).value = value
 		return
 	}
@@ -72,14 +73,9 @@ func (c *Cache) Add(key string, value []byte) {
 	if c.MaxEntries != 0 && c.ll.Len() >= c.MaxEntries {
 		c.RemoveOldest()
 	}
-	var ele *list.Element
-	if c.hot == 0 {
-		ele = c.ll.PushFront(&entry{key, value, false})
-	} else {
-		ele = c.ll.InsertAfter(&entry{key, value, false}, c.ptr)
-	}
+	ele := c.ll.PushFront(&entry{key, value, tempMask})
 	c.cache[key] = ele
-	c.n = 0
+	c.hot++
 }
 
 // Get looks up a key's value from the cache.
@@ -88,15 +84,14 @@ func (c *Cache) Get(key string) (value []byte, ok bool) {
 		return
 	}
 	if ele, hit := c.cache[key]; hit {
-		if ele.Value.(*entry).visited == false {
-			ele.Value.(*entry).visited = true
+		if (ele.Value.(*entry).status & tempMask) == 0 {
+			// eager promotion
 			c.ll.MoveToFront(ele)
+			ele.Value.(*entry).status |= tempMask
 			c.hot++
-			c.n++
-			if c.ptr == nil {
-				c.ptr = ele
-			}
 		}
+		// non-promotion
+		ele.Value.(*entry).status |= visitMask
 		return ele.Value.(*entry).value, true
 	}
 	return
@@ -116,29 +111,33 @@ func (c *Cache) RemoveOldest() {
 	if c.cache == nil {
 		return
 	}
-	if c.hot+c.ll.Len()/100 >= c.ll.Len() {
-		// If hot data > 99%, reset 1% of the tail hot data to cold.
-		for i := 0; i < c.ll.Len()/100; i++ {
-			c.ptr.Value.(*entry).visited = false
-			c.ptr = c.ptr.Prev()
-			c.hot--
-		}
-	} else if float32(c.n)/float32(c.ll.Len()) > 1.0/float32(c.ll.Len()-c.hot) {
-		// AIMD-like reset.
-		for i := 0; i < (c.n+1)/2; i++ {
-			c.ptr.Value.(*entry).visited = false
-			c.ptr = c.ptr.Prev()
-			c.hot--
-		}
+
+	if c.ptr == nil {
+		c.ptr = c.ll.Back()
 	}
-	ele := c.ll.Back()
-	if ele != nil {
+
+	if (c.ptr.Value.(*entry).status & visitMask) == 0 {
+		// quick demotion
+		ele := c.ptr
+		c.ptr = c.ptr.Prev()
 		c.removeElement(ele)
+	} else {
+		// FIFO demotion
+		ele := c.ll.Back()
+		c.ptr.Value.(*entry).status = 0
+		c.ptr = c.ptr.Prev()
+		c.removeElement(ele)
+	}
+
+	if float64(c.hot) > float64(c.MaxEntries)*DefaultMinHotThreshold && (c.ptr.Value.(*entry).status&visitMask) != 0 {
+		c.ptr.Value.(*entry).status = 0
+		c.ptr = c.ptr.Prev()
+		c.hot--
 	}
 }
 
 func (c *Cache) removeElement(e *list.Element) {
-	if e.Value.(*entry).visited == true {
+	if (c.ptr.Value.(*entry).status & tempMask) != 0 {
 		c.hot--
 		if c.ptr == e {
 			c.ptr = c.ptr.Prev()

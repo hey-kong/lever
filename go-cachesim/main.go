@@ -82,7 +82,7 @@ func runTest(cache Cache, cacheName string, keys []string) {
 }
 
 func main() {
-	size := 100000
+	size := 200000
 	lruCache := lru.New(size)
 	fifoCache := fifo.New(size)
 	refifoCache := refifo.New(size)
@@ -118,5 +118,4 @@ func main() {
 	fmt.Printf("SIEVE: Total keys = %d, Hot keys = %d\n", total, hot)
 	total, hot = leverCache.Stats()
 	fmt.Printf("LEVER: Total keys = %d, Hot keys = %d\n", total, hot)
-
 }

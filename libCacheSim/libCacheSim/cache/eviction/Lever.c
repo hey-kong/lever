@@ -230,8 +230,11 @@ static void Lever_evict(cache_t *cache, const request_t *req) {
 static void Lever_remove_obj(cache_t *cache, cache_obj_t *obj_to_remove) {
   DEBUG_ASSERT(obj_to_remove != NULL);
   Lever_params_t *params = cache->eviction_params;
-  if (obj_to_remove == params->pointer) {
-    params->pointer = obj_to_remove->queue.prev;
+  if ((obj_to_remove->lever.status & temp_mask) != 0) {
+    params->hot--;
+    if (obj_to_remove == params->pointer) {
+      params->pointer = obj_to_remove->queue.prev;
+    }
   }
   remove_obj_from_list(&params->q_head, &params->q_tail, obj_to_remove);
   cache_remove_obj_base(cache, obj_to_remove, true);

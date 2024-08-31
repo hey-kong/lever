@@ -4,13 +4,6 @@ import (
 	"container/list"
 )
 
-const (
-	tempMask  = 1
-	visitMask = 1 << tempMask
-
-	DefaultMinHotThreshold = 0.5
-)
-
 type Cache struct {
 	// MaxEntries is the maximum number of cache entries before
 	// an item is evicted. Zero means no limit.
@@ -20,18 +13,16 @@ type Cache struct {
 	// executed when an entry is purged from the cache.
 	OnEvicted func(key string, value []byte)
 
-	// Number of hot keys.
-	hot int
-
-	ptr   *list.Element
+	fast  *list.Element
+	slow  *list.Element
 	ll    *list.List
 	cache map[interface{}]*list.Element
 }
 
 type entry struct {
-	key    string
-	value  []byte
-	status uint8
+	key     string
+	value   []byte
+	visited bool
 }
 
 // New creates a new Cache.
@@ -40,8 +31,8 @@ type entry struct {
 func New(maxEntries int) *Cache {
 	return &Cache{
 		MaxEntries: maxEntries,
-		hot:        0,
-		ptr:        nil,
+		fast:       nil,
+		slow:       nil,
 		ll:         list.New(),
 		cache:      make(map[interface{}]*list.Element),
 	}
@@ -49,33 +40,22 @@ func New(maxEntries int) *Cache {
 
 // Add adds a value to the cache.
 func (c *Cache) Add(key string, value []byte) {
-	// Initialize the cache and treat the first insertion as hot.
 	if c.cache == nil {
-		c.ll = list.New()
 		c.cache = make(map[interface{}]*list.Element)
-		c.ptr = nil
-		c.hot = 0
+		c.ll = list.New()
+		c.fast = nil
+		c.slow = nil
 	}
-
 	if ee, ok := c.cache[key]; ok {
-		if (ee.Value.(*entry).status & tempMask) == 0 {
-			// eager promotion
-			c.ll.MoveToFront(ee)
-			ee.Value.(*entry).status |= tempMask
-			c.hot++
-		}
-		// non-promotion
-		ee.Value.(*entry).status |= visitMask
+		ee.Value.(*entry).visited = true
 		ee.Value.(*entry).value = value
 		return
 	}
-
 	if c.MaxEntries != 0 && c.ll.Len() >= c.MaxEntries {
 		c.RemoveOldest()
 	}
-	ele := c.ll.PushFront(&entry{key, value, tempMask})
+	ele := c.ll.PushFront(&entry{key, value, false})
 	c.cache[key] = ele
-	c.hot++
 }
 
 // Get looks up a key's value from the cache.
@@ -84,14 +64,7 @@ func (c *Cache) Get(key string) (value []byte, ok bool) {
 		return
 	}
 	if ele, hit := c.cache[key]; hit {
-		if (ele.Value.(*entry).status & tempMask) == 0 {
-			// eager promotion
-			c.ll.MoveToFront(ele)
-			ele.Value.(*entry).status |= tempMask
-			c.hot++
-		}
-		// non-promotion
-		ele.Value.(*entry).status |= visitMask
+		ele.Value.(*entry).visited = true
 		return ele.Value.(*entry).value, true
 	}
 	return
@@ -107,42 +80,47 @@ func (c *Cache) Remove(key string) {
 	}
 }
 
+// RemoveOldest removes the oldest item from the cache.
 func (c *Cache) RemoveOldest() {
 	if c.cache == nil {
 		return
 	}
 
-	if c.ptr == nil {
-		c.ptr = c.ll.Back()
+	var ele *list.Element
+	if c.slow == nil {
+		c.slow, c.fast = c.ll.Back(), c.ll.Back()
 	}
 
-	if (c.ptr.Value.(*entry).status & visitMask) == 0 {
-		// quick demotion
-		ele := c.ptr
-		c.ptr = c.ptr.Prev()
-		c.removeElement(ele)
+	for i := 0; i < 2; i++ {
+		ele, c.fast = c.fast, c.fast.Prev()
+		if ele.Value.(*entry).visited {
+			ele.Value.(*entry).visited = false
+			c.ll.MoveAfter(ele, c.slow)
+		}
+		if c.fast == nil {
+			c.fast = c.ll.Back()
+		}
+	}
+
+	ele, c.slow = c.slow, c.slow.Prev()
+	if ele.Value.(*entry).visited {
+		ele.Value.(*entry).visited = false
+		c.ll.Remove(c.ll.Back())
 	} else {
-		// FIFO demotion
-		ele := c.ll.Back()
-		c.ptr.Value.(*entry).status = 0
-		c.ptr = c.ptr.Prev()
 		c.removeElement(ele)
 	}
-
-	if float64(c.hot) > float64(c.MaxEntries)*DefaultMinHotThreshold && (c.ptr.Value.(*entry).status&visitMask) != 0 {
-		c.ptr.Value.(*entry).status = 0
-		c.ptr = c.ptr.Prev()
-		c.hot--
+	if c.slow == nil {
+		c.slow = c.ll.Back()
 	}
 }
 
 func (c *Cache) removeElement(e *list.Element) {
-	if (c.ptr.Value.(*entry).status & tempMask) != 0 {
-		c.hot--
-		if c.ptr == e {
-			c.ptr = c.ptr.Prev()
-		}
+	if c.fast == e {
+		c.fast = c.fast.Prev()
+	} else if c.slow == e {
+		c.slow = c.slow.Prev()
 	}
+
 	c.ll.Remove(e)
 	kv := e.Value.(*entry)
 	delete(c.cache, kv.key)
@@ -172,9 +150,17 @@ func (c *Cache) Clear() {
 }
 
 // Stats returns the total number of entries and the number of hot entries.
-func (c *Cache) Stats() (int, int) {
+func (c *Cache) Stats() (total int, hot int) {
 	if c.cache == nil {
 		return 0, 0
 	}
-	return c.ll.Len(), c.hot
+
+	total = c.ll.Len()
+	hot = 0
+	for _, e := range c.cache {
+		if e.Value.(*entry).visited {
+			hot++
+		}
+	}
+	return total, hot
 }

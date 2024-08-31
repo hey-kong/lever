@@ -128,7 +128,7 @@ typedef struct {
 } __attribute__((packed)) Sieve_obj_params_t;
 
 typedef struct {
-  uint32_t status;
+  uint32_t freq;
 } __attribute__((packed)) Lever_obj_params_t;
 
 typedef struct {
@@ -252,6 +252,16 @@ void move_obj_to_tail(cache_obj_t **head, cache_obj_t **tail,
  */
 void move_obj_to_head(cache_obj_t **head, cache_obj_t **tail,
                       cache_obj_t *cache_obj);
+
+/**
+ * move an object to a position after the marked node in the doubly linked list
+ * @param head
+ * @param tail
+ * @param mark
+ * @param cache_obj
+ */
+void move_obj_after_mark(cache_obj_t **head, cache_obj_t **tail,
+                         cache_obj_t **mark, cache_obj_t *cache_obj);
 
 /**
  * prepend the object to the head of the doubly linked list

@@ -109,7 +109,7 @@ func (c *Cache) RemoveOldest() {
 	if ele.Value.(*entry).visited {
 		ele.Value.(*entry).visited = false
 		// FIFO demotion
-		c.ll.Remove(c.ll.Back())
+		c.removeElement(c.ll.Back())
 	} else {
 		// quick demotion
 		c.removeElement(ele)

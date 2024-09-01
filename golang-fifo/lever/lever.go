@@ -116,12 +116,11 @@ func (s *Lever[K, V]) evict() {
 	if o.Value.(*entry[K, V]).visited {
 		o.Value.(*entry[K, V]).visited = false
 		// FIFO demotion
-		o = s.ll.Back()
-		delete(s.items, o.Value.(*entry[K, V]).key)
-		s.ll.Remove(o)
+		s.removeElement(s.ll.Back())
+	} else {
+		// quick demotion
+		s.removeElement(o)
 	}
-	delete(s.items, o.Value.(*entry[K, V]).key)
-	s.ll.Remove(o)
 }
 
 func (s *Lever[K, V]) removeElement(o *list.Element) {

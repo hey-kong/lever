@@ -274,16 +274,6 @@ void prepend_obj_to_head(cache_obj_t **head, cache_obj_t **tail,
                          cache_obj_t *cache_obj);
 
 /**
- * insert the object after the marked node in the doubly linked list
- * @param head
- * @param tail
- * @param mark
- * @param cache_obj
- */
-void insert_obj_after_mark(cache_obj_t **head, cache_obj_t **tail,
-                           cache_obj_t **mark, cache_obj_t *cache_obj);
-
-/**
  * append the object to the tail of the doubly linked list
  * the object should not be in the list, otherwise, use move_obj_to_tail
  * @param head

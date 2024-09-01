@@ -217,7 +217,8 @@ static void Lever_remove_obj(cache_t *cache, cache_obj_t *obj_to_remove) {
   Lever_params_t *params = cache->eviction_params;
   if (obj_to_remove == params->slow) {
     params->slow = obj_to_remove->queue.prev;
-  } else if (obj_to_remove == params->fast) {
+  }
+  if (obj_to_remove == params->fast) {
     params->fast = obj_to_remove->queue.prev;
   }
   remove_obj_from_list(&params->q_head, &params->q_tail, obj_to_remove);

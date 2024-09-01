@@ -246,36 +246,6 @@ void prepend_obj_to_head(cache_obj_t **head, cache_obj_t **tail,
 }
 
 /**
- * insert the object after the marked node in the doubly linked list
- * @param head
- * @param tail
- * @param mark
- * @param cache_obj
- */
-void insert_obj_after_mark(cache_obj_t **head, cache_obj_t **tail,
-                           cache_obj_t **mark, cache_obj_t *cache_obj) {
-    assert(mark != NULL && cache_obj != NULL);
-
-    cache_obj->queue.prev = *mark;
-    cache_obj->queue.next = (*mark)->queue.next;
-
-    if ((*mark)->queue.next != NULL) {
-        // There is an element after the mark
-        (*mark)->queue.next->queue.prev = cache_obj;
-    } else {
-        // The mark is the tail of the list
-        *tail = cache_obj;
-    }
-
-    (*mark)->queue.next = cache_obj;
-
-    // If the mark is the tail, update the tail
-    if (*tail == *mark) {
-        *tail = cache_obj;
-    }
-}
-
-/**
  * append the object to the tail of the doubly linked list
  * the object is not in the list, otherwise, use move_obj_to_tail
  * @param head
@@ -298,7 +268,6 @@ void append_obj_to_tail(cache_obj_t **head, cache_obj_t **tail,
     // the list has at least one element
     (*tail)->queue.next = cache_obj;
   }
-
 
   *tail = cache_obj;
 }

@@ -62,7 +62,6 @@ func initializeCache(cache Cache, hotKeys []string) {
 // runTest is a generic function to test different cache implementations.
 func runTest(cache Cache, cacheName string, keys []string) {
 	var hits, misses int
-	start := time.Now()
 
 	// Use the pre-generated keys for the test.
 	for _, key := range keys {
@@ -75,10 +74,7 @@ func runTest(cache Cache, cacheName string, keys []string) {
 		}
 	}
 
-	elapsed := time.Since(start)
-
 	fmt.Printf("[%s] Cache Hits: %d, Cache Misses: %d, Hit Rate: %.2f%%\n", cacheName, hits, misses, float64(hits)/float64(hits+misses)*100)
-	fmt.Printf("[%s] Total Time: %s, Average Time per Get: %s\n", cacheName, elapsed, elapsed/time.Duration(len(keys)))
 }
 
 func main() {

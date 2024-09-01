@@ -86,11 +86,14 @@ func (c *Cache) RemoveOldest() {
 		return
 	}
 
-	var ele *list.Element
 	if c.slow == nil {
-		c.slow, c.fast = c.ll.Back(), c.ll.Back()
+		c.slow = c.ll.Back()
+	}
+	if c.fast == nil {
+		c.fast = c.ll.Back()
 	}
 
+	var ele *list.Element
 	for i := 0; i < 2; i++ {
 		ele, c.fast = c.fast, c.fast.Prev()
 		if ele.Value.(*entry).visited {
@@ -105,19 +108,19 @@ func (c *Cache) RemoveOldest() {
 	ele, c.slow = c.slow, c.slow.Prev()
 	if ele.Value.(*entry).visited {
 		ele.Value.(*entry).visited = false
+		// FIFO demotion
 		c.ll.Remove(c.ll.Back())
 	} else {
+		// quick demotion
 		c.removeElement(ele)
-	}
-	if c.slow == nil {
-		c.slow = c.ll.Back()
 	}
 }
 
 func (c *Cache) removeElement(e *list.Element) {
 	if c.fast == e {
 		c.fast = c.fast.Prev()
-	} else if c.slow == e {
+	}
+	if c.slow == e {
 		c.slow = c.slow.Prev()
 	}
 

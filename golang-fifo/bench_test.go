@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/hey-kong/lever/golang-fifo/sieve"
+	"github.com/hey-kong/lever/golang-fifo/lever"
 )
 
 type value struct {
@@ -21,7 +21,7 @@ type benchTypes interface {
 }
 
 func BenchmarkCache(b *testing.B) {
-	b.Run("cache=sieve", func(b *testing.B) {
+	b.Run("cache=lever", func(b *testing.B) {
 		b.Run("t=int32", bench[int32](genKeysInt32))
 		b.Run("t=int64", bench[int64](genKeysInt64))
 		b.Run("t=string", bench[string](genKeysString))
@@ -33,7 +33,7 @@ func bench[T benchTypes](gen func(workload int) []T) func(b *testing.B) {
 	cacheSize := 100000
 
 	return func(b *testing.B) {
-		benchmarkSieveCache[T](b, cacheSize, gen)
+		benchmarkLeverCache[T](b, cacheSize, gen)
 	}
 }
 
@@ -70,8 +70,8 @@ func genKeysComposite(workload int) []compositeKey {
 	return keys
 }
 
-func benchmarkSieveCache[T benchTypes](b *testing.B, cacheSize int, genKey func(size int) []T) {
-	cache := sieve.New[T, value](cacheSize, 0)
+func benchmarkLeverCache[T benchTypes](b *testing.B, cacheSize int, genKey func(size int) []T) {
+	cache := lever.New[T, value](cacheSize, 0)
 	keys := genKey(b.N)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

@@ -101,7 +101,7 @@ func (c *Cache) RemoveOldest() {
 			c.ll.MoveAfter(ele, c.slow)
 		}
 		if c.fast == nil {
-			c.fast = c.ll.Back()
+			break
 		}
 	}
 

@@ -58,8 +58,8 @@ func (s *Lever[K, V]) Set(key K, value V) {
 }
 
 func (s *Lever[K, V]) Get(key K) (value V, ok bool) {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
+	s.lock.Lock()
+	defer s.lock.Unlock()
 	if e, ok := s.items[key]; ok {
 		if !e.Value.(*entry[K, V]).old {
 			if e == s.hand {
@@ -121,7 +121,7 @@ func (s *Lever[K, V]) evict() {
 		o.Value.(*entry[K, V]).old = true
 		o = o.Prev()
 		s.left--
-		if s.left <= s.size/10 {
+		if s.left <= s.size/25 {
 			// reset
 			o = s.ll.Back()
 			s.left = s.size

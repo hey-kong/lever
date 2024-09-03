@@ -12,6 +12,7 @@ type entry[K comparable, V any] struct {
 	key     K
 	value   V
 	visited bool
+	old     bool
 }
 
 type Lever[K comparable, V any] struct {
@@ -19,8 +20,8 @@ type Lever[K comparable, V any] struct {
 	size  int
 	items map[K]*list.Element
 	ll    *list.List
-	fast  *list.Element
-	slow  *list.Element
+	hand  *list.Element
+	left  int
 }
 
 func New[K comparable, V any](size int) fifo.Cache[K, V] {
@@ -36,6 +37,13 @@ func (s *Lever[K, V]) Set(key K, value V) {
 	defer s.lock.Unlock()
 
 	if e, ok := s.items[key]; ok {
+		if !e.Value.(*entry[K, V]).old {
+			if e == s.hand {
+				s.hand = s.hand.Prev()
+				s.left--
+			}
+			s.ll.MoveToFront(e)
+		}
 		e.Value.(*entry[K, V]).value = value
 		e.Value.(*entry[K, V]).visited = true
 		return
@@ -46,12 +54,20 @@ func (s *Lever[K, V]) Set(key K, value V) {
 	}
 	e := &entry[K, V]{key: key, value: value}
 	s.items[key] = s.ll.PushFront(e)
+	s.left++
 }
 
 func (s *Lever[K, V]) Get(key K) (value V, ok bool) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 	if e, ok := s.items[key]; ok {
+		if !e.Value.(*entry[K, V]).old {
+			if e == s.hand {
+				s.hand = s.hand.Prev()
+				s.left--
+			}
+			s.ll.MoveToFront(e)
+		}
 		e.Value.(*entry[K, V]).visited = true
 		return e.Value.(*entry[K, V]).value, true
 	}
@@ -93,44 +109,27 @@ func (s *Lever[K, V]) Purge() {
 }
 
 func (s *Lever[K, V]) evict() {
-	if s.slow == nil {
-		s.slow = s.ll.Back()
-	}
-	if s.fast == nil {
-		s.fast = s.ll.Back()
-	}
-
-	var o *list.Element
-	for i := 0; i < 2; i++ {
-		o, s.fast = s.fast, s.fast.Prev()
-		if o.Value.(*entry[K, V]).visited {
-			o.Value.(*entry[K, V]).visited = false
-			s.ll.MoveAfter(o, s.slow)
-		}
-		if s.fast == nil {
-			break
-		}
+	o := s.hand
+	// if o is nil, then assign it to the tail element in the list
+	if o == nil {
+		o = s.ll.Back()
+		s.left = s.size
 	}
 
-	o, s.slow = s.slow, s.slow.Prev()
-	if o.Value.(*entry[K, V]).visited {
+	for o.Value.(*entry[K, V]).visited {
 		o.Value.(*entry[K, V]).visited = false
-		// FIFO demotion
-		s.removeElement(s.ll.Back())
-	} else {
-		// quick demotion
-		s.removeElement(o)
-	}
-}
-
-func (s *Lever[K, V]) removeElement(o *list.Element) {
-	if s.slow == o {
-		panic("lever: evicting illegal element")
-	}
-	if s.fast == o {
-		s.fast = s.fast.Prev()
+		o.Value.(*entry[K, V]).old = true
+		o = o.Prev()
+		s.left--
+		if s.left <= s.size/10 {
+			// reset
+			o = s.ll.Back()
+			s.left = s.size
+		}
 	}
 
+	s.hand = o.Prev()
+	s.left--
 	delete(s.items, o.Value.(*entry[K, V]).key)
 	s.ll.Remove(o)
 }

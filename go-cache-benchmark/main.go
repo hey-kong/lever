@@ -20,7 +20,6 @@ func main() {
 		cache.NewSieve,
 		cache.NewLever,
 		cache.NewS3FIFO,
-		cache.NewOtter,
 		cache.NewLRU,
 		cache.NewTwoQueue,
 		cache.NewLRUGroupCache,

@@ -124,7 +124,7 @@ func (s *Lever[K, V]) evict() {
 		o = o.Prev()
 		s.right++
 		// protecting 33% of new items in the fresh segment
-		if s.size-s.right < s.hot/2 {
+		if s.size-s.right <= s.hot/2 {
 			// starting the next round of scanning to identify victim
 			o = s.ll.Back()
 			s.right = 0

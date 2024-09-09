@@ -9,10 +9,10 @@ import (
 
 // entry holds the key and value of a cache entry.
 type entry[K comparable, V any] struct {
-	key     K
-	value   V
-	visited bool
-	old     bool
+	key      K
+	value    V
+	visited  bool
+	survived bool
 }
 
 type Lever[K comparable, V any] struct {
@@ -21,7 +21,8 @@ type Lever[K comparable, V any] struct {
 	items map[K]*list.Element
 	ll    *list.List
 	hand  *list.Element
-	left  int
+	right int
+	hot   int
 }
 
 func New[K comparable, V any](size int) fifo.Cache[K, V] {
@@ -37,10 +38,9 @@ func (s *Lever[K, V]) Set(key K, value V) {
 	defer s.lock.Unlock()
 
 	if e, ok := s.items[key]; ok {
-		if !e.Value.(*entry[K, V]).old {
+		if !e.Value.(*entry[K, V]).survived {
 			if e == s.hand {
 				s.hand = s.hand.Prev()
-				s.left--
 			}
 			s.ll.MoveToFront(e)
 		}
@@ -54,17 +54,15 @@ func (s *Lever[K, V]) Set(key K, value V) {
 	}
 	e := &entry[K, V]{key: key, value: value}
 	s.items[key] = s.ll.PushFront(e)
-	s.left++
 }
 
 func (s *Lever[K, V]) Get(key K) (value V, ok bool) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	if e, ok := s.items[key]; ok {
-		if !e.Value.(*entry[K, V]).old {
+		if !e.Value.(*entry[K, V]).survived {
 			if e == s.hand {
 				s.hand = s.hand.Prev()
-				s.left--
 			}
 			s.ll.MoveToFront(e)
 		}
@@ -113,23 +111,28 @@ func (s *Lever[K, V]) evict() {
 	// if o is nil, then assign it to the tail element in the list
 	if o == nil {
 		o = s.ll.Back()
-		s.left = s.size
+		s.right = 0
+		s.hot = 0
 	}
 
 	for o.Value.(*entry[K, V]).visited {
 		o.Value.(*entry[K, V]).visited = false
-		o.Value.(*entry[K, V]).old = true
+		if !o.Value.(*entry[K, V]).survived {
+			o.Value.(*entry[K, V]).survived = true
+			s.hot++
+		}
 		o = o.Prev()
-		s.left--
-		if s.left <= s.size/25 {
-			// reset
+		s.right++
+		// protecting 33% of new items in the fresh segment
+		if s.size-s.right < s.hot/2 {
+			// starting the next round of scanning to identify victim
 			o = s.ll.Back()
-			s.left = s.size
+			s.right = 0
+			s.hot = 0
 		}
 	}
 
 	s.hand = o.Prev()
-	s.left--
 	delete(s.items, o.Value.(*entry[K, V]).key)
 	s.ll.Remove(o)
 }

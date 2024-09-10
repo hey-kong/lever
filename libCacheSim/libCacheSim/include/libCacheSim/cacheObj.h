@@ -129,7 +129,7 @@ typedef struct {
 
 typedef struct {
   uint32_t status;
-} __attribute__((packed)) Lever_obj_params_t;
+} __attribute__((packed)) ShiftSieve_obj_params_t;
 
 typedef struct {
   int64_t next_access_vtime;
@@ -177,7 +177,7 @@ typedef struct cache_obj {
     LIRS_obj_metadata_t LIRS;
     S3FIFO_obj_metadata_t S3FIFO;
     Sieve_obj_params_t sieve;
-    Lever_obj_params_t lever;
+    ShiftSieve_obj_params_t shiftsieve;
 
 #if defined(ENABLE_GLCACHE) && ENABLE_GLCACHE == 1
     GLCache_obj_metadata_t GLCache;

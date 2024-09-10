@@ -1,6 +1,6 @@
-# LEVER
+# ShiftSieve
 
-Precise and Scan-Resistant Cache Eviction for Skewed Workloads.
+Precise and Robust Cache Eviction for Skewed Workloads.
 
 ## Related Links
 

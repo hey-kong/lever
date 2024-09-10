@@ -3,8 +3,6 @@ package s3fifo
 import (
 	"container/list"
 	"sync"
-
-	"github.com/hey-kong/lever/golang-fifo"
 )
 
 type entry[K comparable, V any] struct {

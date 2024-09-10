@@ -9,7 +9,7 @@ require (
 	github.com/elastic/go-freelru v0.11.0
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da
 	github.com/hashicorp/golang-lru/v2 v2.0.7
-	github.com/hey-kong/lever/golang-fifo v0.0.0-00010101000000-000000000000
+	github.com/hey-kong/shiftsieve/golang-fifo v0.0.0-00010101000000-000000000000
 	github.com/maypok86/otter v0.0.0-20231222143008-a9479c80c78a
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/scalalang2/golang-fifo v0.1.3
@@ -24,4 +24,4 @@ require (
 	github.com/mattn/go-runewidth v0.0.9 // indirect
 )
 
-replace github.com/hey-kong/lever/golang-fifo => ../golang-fifo
+replace github.com/hey-kong/shiftsieve/golang-fifo => ../golang-fifo

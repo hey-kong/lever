@@ -17,21 +17,21 @@ typedef struct {
   cache_obj_t *pointer;
   int64_t     right;
   int64_t     hot;
-} Lever_params_t;
+} ShiftSieve_params_t;
 
 // ***********************************************************************
 // ****                                                               ****
 // ****                   function declarations                       ****
 // ****                                                               ****
 // ***********************************************************************
-static void Lever_free(cache_t *cache);
-static bool Lever_get(cache_t *cache, const request_t *req);
-static cache_obj_t *Lever_find(cache_t *cache, const request_t *req,
+static void ShiftSieve_free(cache_t *cache);
+static bool ShiftSieve_get(cache_t *cache, const request_t *req);
+static cache_obj_t *ShiftSieve_find(cache_t *cache, const request_t *req,
                                const bool update_cache);
-static cache_obj_t *Lever_insert(cache_t *cache, const request_t *req);
-static cache_obj_t *Lever_to_evict(cache_t *cache, const request_t *req);
-static void Lever_evict(cache_t *cache, const request_t *req);
-static bool Lever_remove(cache_t *cache, const obj_id_t obj_id);
+static cache_obj_t *ShiftSieve_insert(cache_t *cache, const request_t *req);
+static cache_obj_t *ShiftSieve_to_evict(cache_t *cache, const request_t *req);
+static void ShiftSieve_evict(cache_t *cache, const request_t *req);
+static bool ShiftSieve_remove(cache_t *cache, const obj_id_t obj_id);
 
 // ***********************************************************************
 // ****                                                               ****
@@ -47,18 +47,18 @@ static bool Lever_remove(cache_t *cache, const obj_id_t obj_id);
  * @param cache_specific_params cache specific parameters, see parse_params
  * function or use -e "print" with the cachesim binary
  */
-cache_t *Lever_init(const common_cache_params_t ccache_params,
+cache_t *ShiftSieve_init(const common_cache_params_t ccache_params,
                     const char *cache_specific_params) {
   cache_t *cache =
-      cache_struct_init("Lever", ccache_params, cache_specific_params);
-  cache->cache_init = Lever_init;
-  cache->cache_free = Lever_free;
-  cache->get = Lever_get;
-  cache->find = Lever_find;
-  cache->insert = Lever_insert;
-  cache->evict = Lever_evict;
-  cache->remove = Lever_remove;
-  cache->to_evict = Lever_to_evict;
+      cache_struct_init("ShiftSieve", ccache_params, cache_specific_params);
+  cache->cache_init = ShiftSieve_init;
+  cache->cache_free = ShiftSieve_free;
+  cache->get = ShiftSieve_get;
+  cache->find = ShiftSieve_find;
+  cache->insert = ShiftSieve_insert;
+  cache->evict = ShiftSieve_evict;
+  cache->remove = ShiftSieve_remove;
+  cache->to_evict = ShiftSieve_to_evict;
 
   if (ccache_params.consider_obj_metadata) {
     cache->obj_md_size = 1;
@@ -66,9 +66,9 @@ cache_t *Lever_init(const common_cache_params_t ccache_params,
     cache->obj_md_size = 0;
   }
 
-  cache->eviction_params = my_malloc(Lever_params_t);
-  memset(cache->eviction_params, 0, sizeof(Lever_params_t));
-  Lever_params_t *params = (Lever_params_t *)cache->eviction_params;
+  cache->eviction_params = my_malloc(ShiftSieve_params_t);
+  memset(cache->eviction_params, 0, sizeof(ShiftSieve_params_t));
+  ShiftSieve_params_t *params = (ShiftSieve_params_t *)cache->eviction_params;
   params->q_head = NULL;
   params->q_tail = NULL;
   params->pointer = NULL;
@@ -83,7 +83,7 @@ cache_t *Lever_init(const common_cache_params_t ccache_params,
  *
  * @param cache
  */
-static void Lever_free(cache_t *cache) {
+static void ShiftSieve_free(cache_t *cache) {
   free(cache->eviction_params);
   cache_struct_free(cache);
 }
@@ -108,7 +108,7 @@ static void Lever_free(cache_t *cache) {
  * @return true if cache hit, false if cache miss
  */
 
-static bool Lever_get(cache_t *cache, const request_t *req) {
+static bool ShiftSieve_get(cache_t *cache, const request_t *req) {
   bool ck_hit = cache_get_base(cache, req);
   return ck_hit;
 }
@@ -129,18 +129,18 @@ static bool Lever_get(cache_t *cache, const request_t *req) {
  *  and if the object is expired, it is removed from the cache
  * @return the object or NULL if not found
  */
-static cache_obj_t *Lever_find(cache_t *cache, const request_t *req,
+static cache_obj_t *ShiftSieve_find(cache_t *cache, const request_t *req,
                                const bool update_cache) {
-  Lever_params_t *params = (Lever_params_t *)cache->eviction_params;
+  ShiftSieve_params_t *params = (ShiftSieve_params_t *)cache->eviction_params;
   cache_obj_t *cache_obj = cache_find_base(cache, req, update_cache);
   if (cache_obj != NULL && update_cache) {
-    if ((cache_obj->lever.status & SURVIVED_MASK) == 0) {
+    if ((cache_obj->shiftsieve.status & SURVIVED_MASK) == 0) {
       if (cache_obj == params->pointer) {
         params->pointer = cache_obj->queue.prev;
       }
       move_obj_to_head(&params->q_head, &params->q_tail, cache_obj);
     }
-    cache_obj->lever.status |= VISITED_MASK;
+    cache_obj->shiftsieve.status |= VISITED_MASK;
   }
 
   return cache_obj;
@@ -157,17 +157,17 @@ static cache_obj_t *Lever_find(cache_t *cache, const request_t *req,
  * @param req
  * @return the inserted object
  */
-static cache_obj_t *Lever_insert(cache_t *cache, const request_t *req) {
-  Lever_params_t *params = cache->eviction_params;
+static cache_obj_t *ShiftSieve_insert(cache_t *cache, const request_t *req) {
+  ShiftSieve_params_t *params = cache->eviction_params;
   cache_obj_t *obj = cache_insert_base(cache, req);
   prepend_obj_to_head(&params->q_head, &params->q_tail, obj);
-  obj->lever.status = 0;
+  obj->shiftsieve.status = 0;
 
   return obj;
 }
 
-static cache_obj_t *Lever_to_evict(cache_t *cache, const request_t *req) {
-  Lever_params_t *params = cache->eviction_params;
+static cache_obj_t *ShiftSieve_to_evict(cache_t *cache, const request_t *req) {
+  ShiftSieve_params_t *params = cache->eviction_params;
 
   /* if we have run one full around or first eviction */
   cache_obj_t *obj = params->pointer;
@@ -177,10 +177,10 @@ static cache_obj_t *Lever_to_evict(cache_t *cache, const request_t *req) {
     params->hot = 0;
   }
 
-  while (obj->lever.status & VISITED_MASK) {
-    obj->lever.status &= ~VISITED_MASK;
-    if ((obj->lever.status & SURVIVED_MASK) == 0) {
-      obj->lever.status |= SURVIVED_MASK;
+  while (obj->shiftsieve.status & VISITED_MASK) {
+    obj->shiftsieve.status &= ~VISITED_MASK;
+    if ((obj->shiftsieve.status & SURVIVED_MASK) == 0) {
+      obj->shiftsieve.status |= SURVIVED_MASK;
       params->hot++;
     }
     obj = obj->queue.prev;
@@ -204,8 +204,8 @@ static cache_obj_t *Lever_to_evict(cache_t *cache, const request_t *req) {
  * @param req not used
  * @param evicted_obj if not NULL, return the evicted object to caller
  */
-static void Lever_evict(cache_t *cache, const request_t *req) {
-  Lever_params_t *params = cache->eviction_params;
+static void ShiftSieve_evict(cache_t *cache, const request_t *req) {
+  ShiftSieve_params_t *params = cache->eviction_params;
 
   /* if we have run one full around or first eviction */
   cache_obj_t *obj = params->pointer;
@@ -215,10 +215,10 @@ static void Lever_evict(cache_t *cache, const request_t *req) {
     params->hot = 0;
   }
 
-  while (obj->lever.status & VISITED_MASK) {
-    obj->lever.status &= ~VISITED_MASK;
-    if ((obj->lever.status & SURVIVED_MASK) == 0) {
-      obj->lever.status |= SURVIVED_MASK;
+  while (obj->shiftsieve.status & VISITED_MASK) {
+    obj->shiftsieve.status &= ~VISITED_MASK;
+    if ((obj->shiftsieve.status & SURVIVED_MASK) == 0) {
+      obj->shiftsieve.status |= SURVIVED_MASK;
       params->hot++;
     }
     obj = obj->queue.prev;
@@ -235,9 +235,9 @@ static void Lever_evict(cache_t *cache, const request_t *req) {
   cache_evict_base(cache, obj, true);
 }
 
-static void Lever_remove_obj(cache_t *cache, cache_obj_t *obj_to_remove) {
+static void ShiftSieve_remove_obj(cache_t *cache, cache_obj_t *obj_to_remove) {
   DEBUG_ASSERT(obj_to_remove != NULL);
-  Lever_params_t *params = cache->eviction_params;
+  ShiftSieve_params_t *params = cache->eviction_params;
   if (obj_to_remove == params->pointer) {
     params->pointer = obj_to_remove->queue.prev;
   }
@@ -258,19 +258,19 @@ static void Lever_remove_obj(cache_t *cache, cache_obj_t *obj_to_remove) {
  * @return true if the object is removed, false if the object is not in the
  * cache
  */
-static bool Lever_remove(cache_t *cache, const obj_id_t obj_id) {
+static bool ShiftSieve_remove(cache_t *cache, const obj_id_t obj_id) {
   cache_obj_t *obj = hashtable_find_obj_id(cache->hashtable, obj_id);
   if (obj == NULL) {
     return false;
   }
 
-  Lever_remove_obj(cache, obj);
+  ShiftSieve_remove_obj(cache, obj);
 
   return true;
 }
 
-static void Lever_verify(cache_t *cache) {
-  Lever_params_t *params = cache->eviction_params;
+static void ShiftSieve_verify(cache_t *cache) {
+  ShiftSieve_params_t *params = cache->eviction_params;
   int64_t n_obj = 0, n_byte = 0;
   cache_obj_t *obj = params->q_head;
 

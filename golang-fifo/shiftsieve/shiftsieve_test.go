@@ -1,4 +1,4 @@
-package lever
+package shiftsieve
 
 import (
 	"testing"

@@ -1,10 +1,10 @@
-package lever
+package shiftsieve
 
 import (
 	"container/list"
 	"sync"
 
-	"github.com/hey-kong/lever/golang-fifo"
+	"github.com/hey-kong/shiftsieve/golang-fifo"
 )
 
 // entry holds the key and value of a cache entry.
@@ -15,7 +15,7 @@ type entry[K comparable, V any] struct {
 	survived bool
 }
 
-type Lever[K comparable, V any] struct {
+type ShiftSieve[K comparable, V any] struct {
 	lock  sync.RWMutex
 	size  int
 	items map[K]*list.Element
@@ -26,14 +26,14 @@ type Lever[K comparable, V any] struct {
 }
 
 func New[K comparable, V any](size int) fifo.Cache[K, V] {
-	return &Lever[K, V]{
+	return &ShiftSieve[K, V]{
 		size:  size,
 		items: make(map[K]*list.Element),
 		ll:    list.New(),
 	}
 }
 
-func (s *Lever[K, V]) Set(key K, value V) {
+func (s *ShiftSieve[K, V]) Set(key K, value V) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -56,7 +56,7 @@ func (s *Lever[K, V]) Set(key K, value V) {
 	s.items[key] = s.ll.PushFront(e)
 }
 
-func (s *Lever[K, V]) Get(key K) (value V, ok bool) {
+func (s *ShiftSieve[K, V]) Get(key K) (value V, ok bool) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	if e, ok := s.items[key]; ok {
@@ -73,14 +73,14 @@ func (s *Lever[K, V]) Get(key K) (value V, ok bool) {
 	return
 }
 
-func (s *Lever[K, V]) Contains(key K) (ok bool) {
+func (s *ShiftSieve[K, V]) Contains(key K) (ok bool) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 	_, ok = s.items[key]
 	return
 }
 
-func (s *Lever[K, V]) Peek(key K) (value V, ok bool) {
+func (s *ShiftSieve[K, V]) Peek(key K) (value V, ok bool) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 
@@ -91,14 +91,14 @@ func (s *Lever[K, V]) Peek(key K) (value V, ok bool) {
 	return
 }
 
-func (s *Lever[K, V]) Len() int {
+func (s *ShiftSieve[K, V]) Len() int {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 
 	return s.ll.Len()
 }
 
-func (s *Lever[K, V]) Purge() {
+func (s *ShiftSieve[K, V]) Purge() {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -106,7 +106,7 @@ func (s *Lever[K, V]) Purge() {
 	s.ll = list.New()
 }
 
-func (s *Lever[K, V]) evict() {
+func (s *ShiftSieve[K, V]) evict() {
 	o := s.hand
 	// if o is nil, then assign it to the tail element in the list
 	if o == nil {

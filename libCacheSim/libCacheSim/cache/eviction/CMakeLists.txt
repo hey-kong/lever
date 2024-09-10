@@ -41,7 +41,7 @@ set(sourceC
 
         RandomLRU.c
 
-        Lever.c
+        ShiftSieve.c
 )
 
 if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/priv")

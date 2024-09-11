@@ -1,4 +1,4 @@
-package shiftsieve
+package shakesieve
 
 import (
 	"testing"

@@ -50,7 +50,7 @@ static bool ShiftSieve_remove(cache_t *cache, const obj_id_t obj_id);
 cache_t *ShiftSieve_init(const common_cache_params_t ccache_params,
                     const char *cache_specific_params) {
   cache_t *cache =
-      cache_struct_init("ShiftSieve", ccache_params, cache_specific_params);
+      cache_struct_init("ShakeSieve", ccache_params, cache_specific_params);
   cache->cache_init = ShiftSieve_init;
   cache->cache_free = ShiftSieve_free;
   cache->get = ShiftSieve_get;
@@ -134,13 +134,13 @@ static cache_obj_t *ShiftSieve_find(cache_t *cache, const request_t *req,
   ShiftSieve_params_t *params = (ShiftSieve_params_t *)cache->eviction_params;
   cache_obj_t *cache_obj = cache_find_base(cache, req, update_cache);
   if (cache_obj != NULL && update_cache) {
-    if ((cache_obj->shiftsieve.status & SURVIVED_MASK) == 0) {
+    if ((cache_obj->shakesieve.status & SURVIVED_MASK) == 0) {
       if (cache_obj == params->pointer) {
         params->pointer = cache_obj->queue.prev;
       }
       move_obj_to_head(&params->q_head, &params->q_tail, cache_obj);
     }
-    cache_obj->shiftsieve.status |= VISITED_MASK;
+    cache_obj->shakesieve.status |= VISITED_MASK;
   }
 
   return cache_obj;
@@ -161,7 +161,7 @@ static cache_obj_t *ShiftSieve_insert(cache_t *cache, const request_t *req) {
   ShiftSieve_params_t *params = cache->eviction_params;
   cache_obj_t *obj = cache_insert_base(cache, req);
   prepend_obj_to_head(&params->q_head, &params->q_tail, obj);
-  obj->shiftsieve.status = 0;
+  obj->shakesieve.status = 0;
 
   return obj;
 }
@@ -177,10 +177,10 @@ static cache_obj_t *ShiftSieve_to_evict(cache_t *cache, const request_t *req) {
     params->hot = 0;
   }
 
-  while (obj->shiftsieve.status & VISITED_MASK) {
-    obj->shiftsieve.status &= ~VISITED_MASK;
-    if ((obj->shiftsieve.status & SURVIVED_MASK) == 0) {
-      obj->shiftsieve.status |= SURVIVED_MASK;
+  while (obj->shakesieve.status & VISITED_MASK) {
+    obj->shakesieve.status &= ~VISITED_MASK;
+    if ((obj->shakesieve.status & SURVIVED_MASK) == 0) {
+      obj->shakesieve.status |= SURVIVED_MASK;
       params->hot++;
     }
     obj = obj->queue.prev;
@@ -215,10 +215,10 @@ static void ShiftSieve_evict(cache_t *cache, const request_t *req) {
     params->hot = 0;
   }
 
-  while (obj->shiftsieve.status & VISITED_MASK) {
-    obj->shiftsieve.status &= ~VISITED_MASK;
-    if ((obj->shiftsieve.status & SURVIVED_MASK) == 0) {
-      obj->shiftsieve.status |= SURVIVED_MASK;
+  while (obj->shakesieve.status & VISITED_MASK) {
+    obj->shakesieve.status &= ~VISITED_MASK;
+    if ((obj->shakesieve.status & SURVIVED_MASK) == 0) {
+      obj->shakesieve.status |= SURVIVED_MASK;
       params->hot++;
     }
     obj = obj->queue.prev;

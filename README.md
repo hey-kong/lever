@@ -1,6 +1,6 @@
-# ShiftSieve
+# ShakeSieve
 
-Precise and Robust Cache Eviction for Skewed Workloads.
+General and Precise Cache Eviction for Skewed Workloads.
 
 ## Related Links
 

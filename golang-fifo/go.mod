@@ -1,4 +1,4 @@
-module github.com/hey-kong/shiftsieve/golang-fifo
+module github.com/hey-kong/shakesieve/golang-fifo
 
 go 1.22
 

@@ -173,6 +173,51 @@ void move_obj_to_head(cache_obj_t **head, cache_obj_t **tail,
 }
 
 /**
+ * move an object to a position after the marked node in the doubly linked list
+ * @param head
+ * @param tail
+ * @param mark
+ * @param cache_obj
+ */
+void move_obj_after_mark(cache_obj_t **head, cache_obj_t **tail,
+                         cache_obj_t **mark, cache_obj_t *cache_obj) {
+    assert(head != NULL && tail != NULL && mark != NULL && cache_obj != NULL);
+
+    // if cache_obj == mark, the list is not modified.
+    if (cache_obj == *mark) {
+        return;
+    }
+
+    // if the object is the head, update the head to the next node
+    if (cache_obj == *head) {
+        *head = cache_obj->queue.next;
+        if (*head != NULL) {
+            (*head)->queue.prev = NULL;
+        }
+    } else {
+        // bridge the previous and next nodes to remove cache_obj from its current position
+        cache_obj->queue.prev->queue.next = cache_obj->queue.next;
+        if (cache_obj->queue.next != NULL) {
+            cache_obj->queue.next->queue.prev = cache_obj->queue.prev;
+        } else {
+            // if cache_obj was the tail, update the tail to the previous node
+            *tail = cache_obj->queue.prev;
+        }
+    }
+
+    cache_obj->queue.prev = *mark;
+    cache_obj->queue.next = (*mark)->queue.next;
+
+    if ((*mark)->queue.next != NULL) {
+        (*mark)->queue.next->queue.prev = cache_obj;
+    } else {
+        *tail = cache_obj;
+    }
+
+    (*mark)->queue.next = cache_obj;
+}
+
+/**
  * prepend the object to the head of the doubly linked list
  * the object is not in the list, otherwise, use move_obj_to_head
  * @param head

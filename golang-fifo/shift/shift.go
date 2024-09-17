@@ -52,9 +52,8 @@ func (s *Shift[K, V]) Set(key K, value V) {
 	if s.insertMark == nil {
 		s.items[key] = s.eviction.PushFront(e)
 	} else {
-		s.items[key] = s.retention.InsertAfter(e, s.insertMark)
+		s.items[key] = s.retention.PushFront(e)
 	}
-
 }
 
 func (s *Shift[K, V]) Get(key K) (value V, ok bool) {

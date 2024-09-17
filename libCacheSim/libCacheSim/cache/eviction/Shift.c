@@ -2,21 +2,19 @@
 
 #include "../../dataStructure/hashtable/hashtable.h"
 #include "../../include/libCacheSim/cache.h"
+#include "../../include/libCacheSim/evictionAlgo.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-static const uint32_t VISITED_MASK  = 1U << 0;  // 01
-static const uint32_t SURVIVED_MASK = 1U << 1;  // 10
-
 typedef struct {
-  cache_obj_t *q_head;
-  cache_obj_t *q_tail;
+  cache_t *eviction;
+  cache_t *retention;
 
-  cache_obj_t *pointer;
-  int64_t     right;
-  int64_t     hot;
+  cache_obj_t *mark;
+
+  request_t *req_local;
 } Shift_params_t;
 
 // ***********************************************************************
@@ -32,6 +30,8 @@ static cache_obj_t *Shift_insert(cache_t *cache, const request_t *req);
 static cache_obj_t *Shift_to_evict(cache_t *cache, const request_t *req);
 static void Shift_evict(cache_t *cache, const request_t *req);
 static bool Shift_remove(cache_t *cache, const obj_id_t obj_id);
+static inline int64_t Shift_get_n_obj(const cache_t *cache);
+static inline int64_t Shift_get_occupied_byte(const cache_t *cache);
 
 // ***********************************************************************
 // ****                                                               ****
@@ -59,6 +59,8 @@ cache_t *Shift_init(const common_cache_params_t ccache_params,
   cache->evict = Shift_evict;
   cache->remove = Shift_remove;
   cache->to_evict = Shift_to_evict;
+  cache->get_n_obj = Shift_get_n_obj;
+  cache->get_occupied_byte = Shift_get_occupied_byte;
 
   if (ccache_params.consider_obj_metadata) {
     cache->obj_md_size = 1;
@@ -69,11 +71,16 @@ cache_t *Shift_init(const common_cache_params_t ccache_params,
   cache->eviction_params = my_malloc(Shift_params_t);
   memset(cache->eviction_params, 0, sizeof(Shift_params_t));
   Shift_params_t *params = (Shift_params_t *)cache->eviction_params;
-  params->q_head = NULL;
-  params->q_tail = NULL;
-  params->pointer = NULL;
-  params->right = 0;
-  params->hot = 0;
+
+  common_cache_params_t ccache_params_eviction = ccache_params;
+  params->eviction = FIFO_init(ccache_params_eviction, NULL);
+
+  common_cache_params_t ccache_params_retention = ccache_params;
+  params->retention = FIFO_init(ccache_params_retention, NULL);
+
+  params->mark = NULL;
+
+  params->req_local = new_request();
 
   return cache;
 }
@@ -84,6 +91,10 @@ cache_t *Shift_init(const common_cache_params_t ccache_params,
  * @param cache
  */
 static void Shift_free(cache_t *cache) {
+  Shift_params_t *params = (Shift_params_t *)cache->eviction_params;
+  free_request(params->req_local);
+  params->eviction->cache_free(params->eviction);
+  params->retention->cache_free(params->retention);
   free(cache->eviction_params);
   cache_struct_free(cache);
 }
@@ -132,18 +143,42 @@ static bool Shift_get(cache_t *cache, const request_t *req) {
 static cache_obj_t *Shift_find(cache_t *cache, const request_t *req,
                                const bool update_cache) {
   Shift_params_t *params = (Shift_params_t *)cache->eviction_params;
-  cache_obj_t *cache_obj = cache_find_base(cache, req, update_cache);
-  if (cache_obj != NULL && update_cache) {
-    if ((cache_obj->shift.status & SURVIVED_MASK) == 0) {
-      if (cache_obj == params->pointer) {
-        params->pointer = cache_obj->queue.prev;
-      }
-      move_obj_to_head(&params->q_head, &params->q_tail, cache_obj);
+
+   // if update cache is false, we only check the eviction and retention caches
+  if (!update_cache) {
+    cache_obj_t *obj = params->retention->find(params->retention, req, false);
+    if (obj != NULL) {
+      return obj;
     }
-    cache_obj->shift.status |= VISITED_MASK;
+    obj = params->eviction->find(params->eviction, req, false);
+    if (obj != NULL) {
+      return obj;
+    }
+    return NULL;
   }
 
-  return cache_obj;
+  /* update cache is true from now */
+  if (params->eviction != NULL) {
+    cache_obj_t *obj = params->eviction->find(params->eviction, req, true);
+    if (obj != NULL) {
+      obj->shift.freq = 1;
+      return obj;
+    }
+  }
+
+  if (params->retention != NULL) {
+    cache_obj_t *obj = params->retention->find(params->retention, req, true);
+    if (obj != NULL) {
+      if (obj->shift.freq == 0) {
+        FIFO_params_t* retention_params = (FIFO_params_t *)params->retention->eviction_params;
+        move_obj_to_head(&retention_params->q_head, &retention_params->q_tail, obj);
+      }
+      obj->shift.freq = 1;
+      return obj;
+    }
+  }
+
+  return NULL;
 }
 
 /**
@@ -158,41 +193,23 @@ static cache_obj_t *Shift_find(cache_t *cache, const request_t *req,
  * @return the inserted object
  */
 static cache_obj_t *Shift_insert(cache_t *cache, const request_t *req) {
-  Shift_params_t *params = cache->eviction_params;
-  cache_obj_t *obj = cache_insert_base(cache, req);
-  prepend_obj_to_head(&params->q_head, &params->q_tail, obj);
-  obj->shift.status = 0;
+  Shift_params_t *params = (Shift_params_t *)cache->eviction_params;
+  cache_obj_t *obj = NULL;
+  if (params->mark == NULL) {
+    obj = params->eviction->insert(params->eviction, req);
+  } else {
+    obj = params->retention->insert(params->retention, req);
+    FIFO_params_t* retention_params = (FIFO_params_t *)params->retention->eviction_params;
+    move_obj_after_mark(&retention_params->q_head, &retention_params->q_tail, &params->mark, obj);
+  }
+  obj->shift.freq = 0;
 
   return obj;
 }
 
 static cache_obj_t *Shift_to_evict(cache_t *cache, const request_t *req) {
-  Shift_params_t *params = cache->eviction_params;
-
-  /* if we have run one full around or first eviction */
-  cache_obj_t *obj = params->pointer;
-  if (obj == NULL) {
-    obj = params->q_tail;
-    params->right = 0;
-    params->hot = 0;
-  }
-
-  while (obj->shift.status & VISITED_MASK) {
-    obj->shift.status &= ~VISITED_MASK;
-    if ((obj->shift.status & SURVIVED_MASK) == 0) {
-      obj->shift.status |= SURVIVED_MASK;
-      params->hot++;
-    }
-    obj = obj->queue.prev;
-    params->right++;
-    if (cache->n_obj - params->right <= params->hot / 2) {
-      obj = params->q_tail;
-      params->right = 0;
-      params->hot = 0;
-    }
-  }
-  params->pointer = obj->queue.prev;
-  return obj;
+  assert(false);
+  return NULL;
 }
 
 /**
@@ -205,44 +222,42 @@ static cache_obj_t *Shift_to_evict(cache_t *cache, const request_t *req) {
  * @param evicted_obj if not NULL, return the evicted object to caller
  */
 static void Shift_evict(cache_t *cache, const request_t *req) {
-  Shift_params_t *params = cache->eviction_params;
+  Shift_params_t *params = (Shift_params_t *)cache->eviction_params;
+  cache_t *eviction = params->eviction;
 
-  /* if we have run one full around or first eviction */
-  cache_obj_t *obj = params->pointer;
-  if (obj == NULL) {
-    obj = params->q_tail;
-    params->right = 0;
-    params->hot = 0;
-  }
-
-  while (obj->shift.status & VISITED_MASK) {
-    obj->shift.status &= ~VISITED_MASK;
-    if ((obj->shift.status & SURVIVED_MASK) == 0) {
-      obj->shift.status |= SURVIVED_MASK;
-      params->hot++;
+  bool has_evicted = false;
+  while (!has_evicted && eviction->n_obj > 0) {
+    cache_obj_t *obj_to_evict = eviction->to_evict(eviction, req);
+    DEBUG_ASSERT(obj_to_evict != NULL);
+    copy_cache_obj_to_request(params->req_local, obj_to_evict);
+    if (obj_to_evict->shift.freq >= 1) {
+      cache_obj_t *new_obj = params->retention->insert(params->retention, params->req_local);
+      new_obj->shift.freq = 0;
+    } else {
+      has_evicted = true;
     }
-    obj = obj->queue.prev;
-    params->right++;
-    if (cache->n_obj - params->right <= params->hot / 2) {
-      obj = params->q_tail;
-      params->right = 0;
-      params->hot = 0;
+    bool removed = eviction->remove(eviction, obj_to_evict->obj_id);
+    if (!removed) {
+      ERROR("cannot remove obj %ld\n", (long)obj_to_evict->obj_id);
+    }
+    obj_to_evict = NULL;
+    if (eviction->n_obj <= 0) {
+      params->eviction = params->retention;
+      params->retention = eviction;
+      params->mark = NULL;
     }
   }
 
-  params->pointer = obj->queue.prev;
-  remove_obj_from_list(&params->q_head, &params->q_tail, obj);
-  cache_evict_base(cache, obj, true);
-}
-
-static void Shift_remove_obj(cache_t *cache, cache_obj_t *obj_to_remove) {
-  DEBUG_ASSERT(obj_to_remove != NULL);
-  Shift_params_t *params = cache->eviction_params;
-  if (obj_to_remove == params->pointer) {
-    params->pointer = obj_to_remove->queue.prev;
+  if ((params->eviction->n_obj < cache->cache_size / 50) && params->mark == NULL) {
+    FIFO_params_t* retention_params = (FIFO_params_t *)params->retention->eviction_params;
+    params->mark = retention_params->q_tail;
+    int n = 0;
+    while (params->mark != NULL && params->mark->shift.freq == 0) {
+      n++;
+      params->mark = params->mark->queue.prev;
+    }
+    if (n == params->retention->n_obj) params->mark = retention_params->q_head;
   }
-  remove_obj_from_list(&params->q_head, &params->q_tail, obj_to_remove);
-  cache_remove_obj_base(cache, obj_to_remove, true);
 }
 
 /**
@@ -259,30 +274,26 @@ static void Shift_remove_obj(cache_t *cache, cache_obj_t *obj_to_remove) {
  * cache
  */
 static bool Shift_remove(cache_t *cache, const obj_id_t obj_id) {
-  cache_obj_t *obj = hashtable_find_obj_id(cache->hashtable, obj_id);
-  if (obj == NULL) {
-    return false;
+  Shift_params_t *params = (Shift_params_t *)cache->eviction_params;
+  bool removed = params->eviction->remove(params->eviction, obj_id);
+  if (!removed) {
+    removed = params->retention->remove(params->retention, obj_id);
+    // TODO: update params->mark
   }
 
-  Shift_remove_obj(cache, obj);
-
-  return true;
+  return removed;
 }
 
-static void Shift_verify(cache_t *cache) {
-  Shift_params_t *params = cache->eviction_params;
-  int64_t n_obj = 0, n_byte = 0;
-  cache_obj_t *obj = params->q_head;
+static inline int64_t Shift_get_occupied_byte(const cache_t *cache) {
+  Shift_params_t *params = (Shift_params_t *)cache->eviction_params;
+  return params->eviction->get_occupied_byte(params->eviction) +
+         params->retention->get_occupied_byte(params->retention);
+}
 
-  while (obj != NULL) {
-    assert(hashtable_find_obj_id(cache->hashtable, obj->obj_id) != NULL);
-    n_obj++;
-    n_byte += obj->obj_size;
-    obj = obj->queue.next;
-  }
-
-  assert(n_obj == cache->get_n_obj(cache));
-  assert(n_byte == cache->get_occupied_byte(cache));
+static inline int64_t Shift_get_n_obj(const cache_t *cache) {
+  Shift_params_t *params = (Shift_params_t *)cache->eviction_params;
+  return params->eviction->get_n_obj(params->eviction) +
+         params->retention->get_n_obj(params->retention);
 }
 
 #ifdef __cplusplus

@@ -4,7 +4,7 @@ import (
 	"container/list"
 	"sync"
 
-	"github.com/hey-kong/shakesieve/golang-fifo"
+	"github.com/hey-kong/shift/golang-fifo"
 )
 
 // entry holds the key and value of a cache entry.

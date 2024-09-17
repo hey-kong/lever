@@ -4,7 +4,7 @@ import (
 	"container/list"
 	"sync"
 
-	"github.com/hey-kong/shakesieve/golang-fifo"
+	"github.com/hey-kong/shift/golang-fifo"
 )
 
 type entry[K comparable, V any] struct {

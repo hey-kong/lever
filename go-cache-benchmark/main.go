@@ -18,7 +18,7 @@ func main() {
 	cacheSizeMultiplier := []float64{0.001, 0.01, 0.1}
 	caches := []NewCacheFunc{
 		cache.NewSieve,
-		cache.NewShiftSieve,
+		cache.NewShift,
 		cache.NewS3FIFO,
 		cache.NewLRU,
 		cache.NewTwoQueue,

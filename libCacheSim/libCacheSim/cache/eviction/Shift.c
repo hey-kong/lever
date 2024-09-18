@@ -169,7 +169,7 @@ static cache_obj_t *Shift_find(cache_t *cache, const request_t *req,
   if (params->retention != NULL) {
     cache_obj_t *obj = params->retention->find(params->retention, req, true);
     if (obj != NULL) {
-      if (obj->shift.freq == 0) {
+      if (params->mark == NULL) {
         FIFO_params_t* retention_params = (FIFO_params_t *)params->retention->eviction_params;
         move_obj_to_head(&retention_params->q_head, &retention_params->q_tail, obj);
       }
@@ -248,15 +248,17 @@ static void Shift_evict(cache_t *cache, const request_t *req) {
     }
   }
 
-  if ((params->eviction->n_obj < cache->cache_size / 50) && params->mark == NULL) {
+  if ((params->eviction->n_obj <= cache->cache_size / 10) && params->mark == NULL) {
     FIFO_params_t* retention_params = (FIFO_params_t *)params->retention->eviction_params;
     params->mark = retention_params->q_tail;
     int n = 0;
     while (params->mark != NULL && params->mark->shift.freq == 0) {
+      params->mark = params->mark->queue.prev;
       n++;
+    }
+    for (int i = n; i < params->eviction->n_obj; i++) {
       params->mark = params->mark->queue.prev;
     }
-    if (n == params->retention->n_obj) params->mark = retention_params->q_head;
   }
 }
 

@@ -37,11 +37,11 @@ func (s *Shift[K, V]) Set(key K, value V) {
 	defer s.lock.Unlock()
 
 	if e, ok := s.items[key]; ok {
-		if e.List() == s.retention && !e.Value.(*entry[K, V]).visited {
+		if e.List() == s.retention && s.insertMark == nil {
 			s.retention.MoveToFront(e)
 		}
-		e.Value.(*entry[K, V]).value = value
 		e.Value.(*entry[K, V]).visited = true
+		e.Value.(*entry[K, V]).value = value
 		return
 	}
 
@@ -52,7 +52,7 @@ func (s *Shift[K, V]) Set(key K, value V) {
 	if s.insertMark == nil {
 		s.items[key] = s.eviction.PushFront(e)
 	} else {
-		s.items[key] = s.retention.PushFront(e)
+		s.items[key] = s.retention.InsertAfter(e, s.insertMark)
 	}
 }
 
@@ -60,10 +60,8 @@ func (s *Shift[K, V]) Get(key K) (value V, ok bool) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	if e, ok := s.items[key]; ok {
-		if e.List() == s.retention {
-			if !e.Value.(*entry[K, V]).visited {
-				s.retention.MoveToFront(e)
-			}
+		if e.List() == s.retention && s.insertMark == nil {
+			s.retention.MoveToFront(e)
 		}
 		e.Value.(*entry[K, V]).visited = true
 		return e.Value.(*entry[K, V]).value, true
@@ -113,25 +111,28 @@ func (s *Shift[K, V]) evict() {
 		key := o.Value.(*entry[K, V]).key
 		if o.Value.(*entry[K, V]).visited {
 			o.Value.(*entry[K, V]).visited = false
-			s.eviction.Remove(o)
 			s.items[o.Value.(*entry[K, V]).key] = s.retention.PushFront(o.Value)
 		} else {
 			evicted = true
 			delete(s.items, key)
-			s.eviction.Remove(o)
 		}
+		s.eviction.Remove(o)
 		if s.eviction.Len() == 0 {
 			s.eviction, s.retention = s.retention, s.eviction
 			s.insertMark = nil
 		}
 	}
 
-	// if the eviction queue size is less than 2% of the total cache size
-	// find the most recently visited entry in the retention queue and set it as insertMark
-	// insert the new entry into the retention queue after the insertMark pointer
-	if s.eviction.Len() < s.size/50 && s.insertMark == nil {
+	// if the eviction queue size is less than 10% (refer to S3FIFO) of the total cache size, set the insertMark at
+	// the tail of the retention queue and move it backwards, indicating these entries are LRU candidates for eviction
+	if s.eviction.Len() <= s.size/10 && s.insertMark == nil {
 		s.insertMark = s.retention.Back()
+		n := 0
 		for s.insertMark != nil && !s.insertMark.Value.(*entry[K, V]).visited {
+			s.insertMark = s.insertMark.Prev()
+			n++
+		}
+		for i := n; i < s.eviction.Len(); i++ {
 			s.insertMark = s.insertMark.Prev()
 		}
 	}

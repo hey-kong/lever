@@ -9,9 +9,9 @@ import (
 
 // entry holds the key and value of a cache entry.
 type entry[K comparable, V any] struct {
-	key     K
-	value   V
-	visited bool
+	key   K
+	value V
+	freq  byte
 }
 
 type Shift[K comparable, V any] struct {
@@ -37,10 +37,13 @@ func (s *Shift[K, V]) Set(key K, value V) {
 	defer s.lock.Unlock()
 
 	if e, ok := s.items[key]; ok {
-		if e.List() == s.retention && s.insertMark == nil {
+		if e.List() == s.eviction {
+			s.eviction.MoveToFront(e)
+		}
+		if e.List() == s.retention {
 			s.retention.MoveToFront(e)
 		}
-		e.Value.(*entry[K, V]).visited = true
+		e.Value.(*entry[K, V]).freq += 1
 		e.Value.(*entry[K, V]).value = value
 		return
 	}
@@ -60,10 +63,13 @@ func (s *Shift[K, V]) Get(key K) (value V, ok bool) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	if e, ok := s.items[key]; ok {
-		if e.List() == s.retention && s.insertMark == nil {
+		if e.List() == s.eviction {
+			s.eviction.MoveToFront(e)
+		}
+		if e.List() == s.retention {
 			s.retention.MoveToFront(e)
 		}
-		e.Value.(*entry[K, V]).visited = true
+		e.Value.(*entry[K, V]).freq += 1
 		return e.Value.(*entry[K, V]).value, true
 	}
 
@@ -109,8 +115,8 @@ func (s *Shift[K, V]) evict() {
 	for s.eviction.Len() > 0 && !evicted {
 		o := s.eviction.Back()
 		key := o.Value.(*entry[K, V]).key
-		if o.Value.(*entry[K, V]).visited {
-			o.Value.(*entry[K, V]).visited = false
+		if o.Value.(*entry[K, V]).freq > 0 {
+			o.Value.(*entry[K, V]).freq /= 2
 			s.items[o.Value.(*entry[K, V]).key] = s.retention.PushFront(o.Value)
 		} else {
 			evicted = true
@@ -123,17 +129,9 @@ func (s *Shift[K, V]) evict() {
 		}
 	}
 
-	// if the eviction queue size is less than 10% (refer to S3FIFO) of the total cache size, set the insertMark at
-	// the tail of the retention queue and move it backwards, indicating these entries are LRU candidates for eviction
-	if s.eviction.Len() <= s.size/10 && s.insertMark == nil {
+	// if the eviction queue size is less than 10% (refer to S3FIFO) of the total cache size,
+	// set the insertMark at the tail of the retention queue.
+	if s.eviction.Len() <= s.size/10 {
 		s.insertMark = s.retention.Back()
-		n := 0
-		for s.insertMark != nil && !s.insertMark.Value.(*entry[K, V]).visited {
-			s.insertMark = s.insertMark.Prev()
-			n++
-		}
-		for i := n; i < s.eviction.Len(); i++ {
-			s.insertMark = s.insertMark.Prev()
-		}
 	}
 }

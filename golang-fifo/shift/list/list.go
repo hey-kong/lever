@@ -43,7 +43,7 @@ func (e *Element) Prev() *Element {
 	return nil
 }
 
-// List returns the list to which this element belongs.
+// List returns the list to which the element belongs.
 func (e *Element) List() *List {
 	return e.list
 }

@@ -15,12 +15,12 @@ type entry[K comparable, V any] struct {
 }
 
 type Shift[K comparable, V any] struct {
-	lock       sync.RWMutex
-	size       int
-	items      map[K]*list.Element
-	eviction   *list.List
-	retention  *list.List
-	insertMark *list.Element
+	lock      sync.RWMutex
+	size      int
+	items     map[K]*list.Element
+	eviction  *list.List
+	retention *list.List
+	shift     bool
 }
 
 func New[K comparable, V any](size int) fifo.Cache[K, V] {
@@ -29,6 +29,7 @@ func New[K comparable, V any](size int) fifo.Cache[K, V] {
 		items:     make(map[K]*list.Element),
 		eviction:  list.New(),
 		retention: list.New(),
+		shift:     false,
 	}
 }
 
@@ -52,10 +53,10 @@ func (s *Shift[K, V]) Set(key K, value V) {
 		s.evict()
 	}
 	e := &entry[K, V]{key: key, value: value}
-	if s.insertMark == nil {
-		s.items[key] = s.eviction.PushFront(e)
+	if s.shift {
+		s.items[key] = s.retention.PushFront(e)
 	} else {
-		s.items[key] = s.retention.InsertAfter(e, s.insertMark)
+		s.items[key] = s.eviction.PushFront(e)
 	}
 }
 
@@ -125,13 +126,13 @@ func (s *Shift[K, V]) evict() {
 		s.eviction.Remove(o)
 		if s.eviction.Len() == 0 {
 			s.eviction, s.retention = s.retention, s.eviction
-			s.insertMark = nil
+			s.shift = false
 		}
 	}
 
-	// if the eviction queue size is less than 10% (refer to S3FIFO) of the total cache size,
-	// set the insertMark at the tail of the retention queue.
+	// if the eviction queue size is less than 10% (refer to S3FIFO) of total size,
+	// shift insertion to the retention queue to protect new entries.
 	if s.eviction.Len() <= s.size/10 {
-		s.insertMark = s.retention.Back()
+		s.shift = true
 	}
 }

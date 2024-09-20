@@ -12,7 +12,7 @@ typedef struct {
   cache_t *eviction;
   cache_t *retention;
 
-  cache_obj_t *mark;
+  bool shift;
 
   request_t *req_local;
 } Shift_params_t;
@@ -73,12 +73,12 @@ cache_t *Shift_init(const common_cache_params_t ccache_params,
   Shift_params_t *params = (Shift_params_t *)cache->eviction_params;
 
   common_cache_params_t ccache_params_eviction = ccache_params;
-  params->eviction = FIFO_init(ccache_params_eviction, NULL);
+  params->eviction = LRU_init(ccache_params_eviction, NULL);
 
   common_cache_params_t ccache_params_retention = ccache_params;
-  params->retention = FIFO_init(ccache_params_retention, NULL);
+  params->retention = LRU_init(ccache_params_retention, NULL);
 
-  params->mark = NULL;
+  params->shift = false;
 
   params->req_local = new_request();
 
@@ -161,7 +161,7 @@ static cache_obj_t *Shift_find(cache_t *cache, const request_t *req,
   if (params->eviction != NULL) {
     cache_obj_t *obj = params->eviction->find(params->eviction, req, true);
     if (obj != NULL) {
-      obj->shift.freq = 1;
+      obj->shift.freq += 1;
       return obj;
     }
   }
@@ -169,11 +169,7 @@ static cache_obj_t *Shift_find(cache_t *cache, const request_t *req,
   if (params->retention != NULL) {
     cache_obj_t *obj = params->retention->find(params->retention, req, true);
     if (obj != NULL) {
-      if (params->mark == NULL) {
-        FIFO_params_t* retention_params = (FIFO_params_t *)params->retention->eviction_params;
-        move_obj_to_head(&retention_params->q_head, &retention_params->q_tail, obj);
-      }
-      obj->shift.freq = 1;
+      obj->shift.freq += 1;
       return obj;
     }
   }
@@ -195,12 +191,10 @@ static cache_obj_t *Shift_find(cache_t *cache, const request_t *req,
 static cache_obj_t *Shift_insert(cache_t *cache, const request_t *req) {
   Shift_params_t *params = (Shift_params_t *)cache->eviction_params;
   cache_obj_t *obj = NULL;
-  if (params->mark == NULL) {
-    obj = params->eviction->insert(params->eviction, req);
-  } else {
+  if (params->shift) {
     obj = params->retention->insert(params->retention, req);
-    FIFO_params_t* retention_params = (FIFO_params_t *)params->retention->eviction_params;
-    move_obj_after_mark(&retention_params->q_head, &retention_params->q_tail, &params->mark, obj);
+  } else {
+    obj = params->eviction->insert(params->eviction, req);
   }
   obj->shift.freq = 0;
 
@@ -232,7 +226,7 @@ static void Shift_evict(cache_t *cache, const request_t *req) {
     copy_cache_obj_to_request(params->req_local, obj_to_evict);
     if (obj_to_evict->shift.freq >= 1) {
       cache_obj_t *new_obj = params->retention->insert(params->retention, params->req_local);
-      new_obj->shift.freq = 0;
+      new_obj->shift.freq /= 2;
     } else {
       has_evicted = true;
     }
@@ -244,21 +238,12 @@ static void Shift_evict(cache_t *cache, const request_t *req) {
     if (eviction->n_obj <= 0) {
       params->eviction = params->retention;
       params->retention = eviction;
-      params->mark = NULL;
+      params->shift = false;
     }
   }
 
-  if ((params->eviction->n_obj <= cache->cache_size / 10) && params->mark == NULL) {
-    FIFO_params_t* retention_params = (FIFO_params_t *)params->retention->eviction_params;
-    params->mark = retention_params->q_tail;
-    int n = 0;
-    while (params->mark != NULL && params->mark->shift.freq == 0) {
-      params->mark = params->mark->queue.prev;
-      n++;
-    }
-    for (int i = n; i < params->eviction->n_obj; i++) {
-      params->mark = params->mark->queue.prev;
-    }
+  if (params->eviction->n_obj <= cache->get_n_obj(cache) / 10) {
+    params->shift = true;
   }
 }
 
@@ -280,7 +265,6 @@ static bool Shift_remove(cache_t *cache, const obj_id_t obj_id) {
   bool removed = params->eviction->remove(params->eviction, obj_id);
   if (!removed) {
     removed = params->retention->remove(params->retention, obj_id);
-    // TODO: update params->mark
   }
 
   return removed;

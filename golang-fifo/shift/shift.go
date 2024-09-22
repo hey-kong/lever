@@ -38,10 +38,10 @@ func (s *Shift[K, V]) Set(key K, value V) {
 	defer s.lock.Unlock()
 
 	if e, ok := s.items[key]; ok {
-		if e.List() == s.eviction {
+		if e.List() == s.eviction && e.Value.(*entry[K, V]).freq == 0 {
 			s.eviction.MoveToFront(e)
 		}
-		if e.List() == s.retention {
+		if e.List() == s.retention && e.Value.(*entry[K, V]).freq == 0 {
 			s.retention.MoveToFront(e)
 		}
 		e.Value.(*entry[K, V]).freq += 1
@@ -64,10 +64,10 @@ func (s *Shift[K, V]) Get(key K) (value V, ok bool) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	if e, ok := s.items[key]; ok {
-		if e.List() == s.eviction {
+		if e.List() == s.eviction && e.Value.(*entry[K, V]).freq == 0 {
 			s.eviction.MoveToFront(e)
 		}
-		if e.List() == s.retention {
+		if e.List() == s.retention && e.Value.(*entry[K, V]).freq == 0 {
 			s.retention.MoveToFront(e)
 		}
 		e.Value.(*entry[K, V]).freq += 1

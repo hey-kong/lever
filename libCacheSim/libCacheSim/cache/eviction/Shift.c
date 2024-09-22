@@ -73,10 +73,10 @@ cache_t *Shift_init(const common_cache_params_t ccache_params,
   Shift_params_t *params = (Shift_params_t *)cache->eviction_params;
 
   common_cache_params_t ccache_params_eviction = ccache_params;
-  params->eviction = LRU_init(ccache_params_eviction, NULL);
+  params->eviction = FIFO_init(ccache_params_eviction, NULL);
 
   common_cache_params_t ccache_params_retention = ccache_params;
-  params->retention = LRU_init(ccache_params_retention, NULL);
+  params->retention = FIFO_init(ccache_params_retention, NULL);
 
   params->shift = false;
 
@@ -161,6 +161,10 @@ static cache_obj_t *Shift_find(cache_t *cache, const request_t *req,
   if (params->eviction != NULL) {
     cache_obj_t *obj = params->eviction->find(params->eviction, req, true);
     if (obj != NULL) {
+      if (obj->shift.freq == 0) {
+        FIFO_params_t* eviction_params = (FIFO_params_t *)params->eviction->eviction_params;
+        move_obj_to_head(&eviction_params->q_head, &eviction_params->q_tail, obj);
+      }
       obj->shift.freq += 1;
       return obj;
     }
@@ -169,6 +173,10 @@ static cache_obj_t *Shift_find(cache_t *cache, const request_t *req,
   if (params->retention != NULL) {
     cache_obj_t *obj = params->retention->find(params->retention, req, true);
     if (obj != NULL) {
+      if (obj->shift.freq == 0) {
+        FIFO_params_t* retention_params = (FIFO_params_t *)params->retention->eviction_params;
+        move_obj_to_head(&retention_params->q_head, &retention_params->q_tail, obj);
+      }
       obj->shift.freq += 1;
       return obj;
     }

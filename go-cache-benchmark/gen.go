@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-	"go-cache-benchmark/zipf"
 	"math/rand"
+
+	"github.com/hey-kong/shift/go-cache-benchmark/zipf"
 )
 
 type ZipfGenerator struct {

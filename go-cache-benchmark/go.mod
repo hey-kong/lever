@@ -1,4 +1,4 @@
-module go-cache-benchmark
+module github.com/hey-kong/shift/go-cache-benchmark
 
 go 1.22.2
 

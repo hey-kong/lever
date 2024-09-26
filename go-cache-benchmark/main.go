@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"go-cache-benchmark/cache"
+	"github.com/hey-kong/shift/go-cache-benchmark/cache"
 )
 
 const workloadMultiplier = 15

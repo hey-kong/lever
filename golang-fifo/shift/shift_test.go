@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestGetAndSetOnSieve(t *testing.T) {
+func TestGetAndSetOnShift(t *testing.T) {
 	items := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	cache := New[int, int](10)
 
@@ -21,7 +21,7 @@ func TestGetAndSetOnSieve(t *testing.T) {
 	}
 }
 
-func TestContainsOnSieve(t *testing.T) {
+func TestContainsOnShift(t *testing.T) {
 	cache := New[string, string](10)
 	require.False(t, cache.Contains("hello"))
 
@@ -29,7 +29,7 @@ func TestContainsOnSieve(t *testing.T) {
 	require.True(t, cache.Contains("hello"))
 }
 
-func TestLenOnSieve(t *testing.T) {
+func TestLenOnShift(t *testing.T) {
 	cache := New[int, int](10)
 	require.Equal(t, 0, cache.Len())
 

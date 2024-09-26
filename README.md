@@ -1,6 +1,6 @@
 # Shift
 
-General and Precise Cache Eviction for Skewed Workloads.
+A Precise Cache Eviction Algorithm by Coordinating Segmented One-Shot LRU with Frequency.
 
 ## Related Links
 

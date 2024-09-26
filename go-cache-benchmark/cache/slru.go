@@ -1,21 +1,16 @@
 package cache
 
 import (
-	"github.com/golang/groupcache/lru"
-	"sync"
+	fifo "github.com/hey-kong/shift/golang-fifo"
+	"github.com/hey-kong/shift/golang-fifo/slru"
 )
 
 type SLRU struct {
-	lock  sync.Mutex
-	once  *lru.Cache
-	twice *lru.Cache
+	v fifo.Cache[string, any]
 }
 
 func NewSLRU(size int) Cache {
-	return &SLRU{
-		once:  lru.New(int(float64(size) * 0.2)),
-		twice: lru.New(int(float64(size) * 0.8)),
-	}
+	return &SLRU{slru.New[string, any](size)}
 }
 
 func (s *SLRU) Name() string {
@@ -23,28 +18,14 @@ func (s *SLRU) Name() string {
 }
 
 func (s *SLRU) Get(key string) bool {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	val, ok := s.once.Get(key)
-	if ok {
-		s.once.Remove(key)
-		s.twice.Add(key, val)
-		return true
-	}
-
-	_, ok = s.twice.Get(key)
+	_, ok := s.v.Get(key)
 	return ok
 }
 
 func (s *SLRU) Set(key string) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	s.once.Add(key, key)
+	s.v.Set(key, key)
 }
 
 func (s *SLRU) Close() {
-	s.once.Clear()
-	s.twice.Clear()
+
 }

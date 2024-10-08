@@ -165,7 +165,9 @@ static cache_obj_t *Shift_find(cache_t *cache, const request_t *req,
         FIFO_params_t* eviction_params = (FIFO_params_t *)params->eviction->eviction_params;
         move_obj_to_head(&eviction_params->q_head, &eviction_params->q_tail, obj);
       }
-      obj->shift.freq += 1;
+      if (obj->shift.freq < 255) {
+        obj->shift.freq += 1;
+      }
       return obj;
     }
   }
@@ -177,7 +179,9 @@ static cache_obj_t *Shift_find(cache_t *cache, const request_t *req,
         FIFO_params_t* retention_params = (FIFO_params_t *)params->retention->eviction_params;
         move_obj_to_head(&retention_params->q_head, &retention_params->q_tail, obj);
       }
-      obj->shift.freq += 1;
+      if (obj->shift.freq < 255) {
+        obj->shift.freq += 1;
+      }
       return obj;
     }
   }
